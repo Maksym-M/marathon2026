@@ -1,0 +1,270 @@
+@use 'app/shared/styles/abstracts/colors' as color;
+
+.page {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 24px 40px 64px;
+}
+
+.back-link {
+  color: color.$green-600;
+  text-decoration: none;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+.title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  margin: 16px 0 24px;
+}
+
+.title {
+  margin: 0;
+  font-size: 32px;
+  line-height: 40px;
+}
+
+.badge {
+  padding: 4px 12px;
+  border-radius: 16px;
+  background: color.$orange-100;
+  font-size: 12px;
+
+  &--sent {
+    background: color.$green-100;
+    color: color.$green-600;
+  }
+}
+
+.state {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 16px;
+  margin: 0;
+  font-size: 16px;
+}
+
+.banner {
+  margin: 0 0 24px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  background: color.$orange-100;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  align-items: start;
+  gap: 24px;
+}
+
+.main-column,
+.side-column {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.card {
+  padding: 20px 24px;
+  border-radius: 16px;
+  background: color.$neutral-0;
+  box-shadow: 0 0 10px 4px color.$shadow;
+}
+
+.details dl {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 8px 32px;
+  margin: 0;
+}
+
+.details dt {
+  color: color.$neutral-600;
+}
+
+.details dd {
+  margin: 0;
+}
+
+.section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin: 8px 0 12px;
+}
+
+.section-title {
+  margin: 0;
+  font-size: 20px;
+  line-height: 28px;
+}
+
+.meta {
+  margin: 0;
+  color: color.$neutral-600;
+  font-size: 12px;
+}
+
+.progress-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+
+.sync {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.progress {
+  height: 8px;
+  margin-top: 12px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: color.$neutral-100;
+}
+
+.progress-fill {
+  display: block;
+  height: 100%;
+  background: color.$green-600;
+}
+
+.sync-error {
+  margin: 8px 0 0;
+  color: color.$red-400;
+  font-size: 12px;
+
+  &:empty {
+    display: none;
+  }
+}
+
+.participants {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.add-link {
+  color: color.$green-600;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.placeholder {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: color.$neutral-100;
+  color: color.$neutral-600;
+}
+
+.placeholder-title {
+  margin: 0;
+  color: color.$neutral-600;
+  font-size: 18px;
+  font-weight: 500;
+}
+
+.placeholder-actions {
+  display: flex;
+  flex: 1;
+  gap: 12px;
+}
+
+.status {
+  padding: 2px 10px;
+  border-radius: 12px;
+  background: color.$neutral-100;
+  color: color.$neutral-600;
+  font-size: 12px;
+}
+
+.link-button {
+  padding: 0;
+  border: 0;
+  border-bottom: 1px solid currentColor;
+  background: transparent;
+  color: color.$neutral-900;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+
+  &--quiet {
+    color: color.$neutral-600;
+
+    &:hover {
+      color: color.$red-400;
+    }
+  }
+}
+
+.total {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.total-label {
+  font-size: 18px;
+}
+
+.total-value {
+  color: color.$green-600;
+  font-size: 28px;
+  font-weight: 600;
+}
+
+.total-card .meta {
+  margin: 8px 0 16px;
+}
+
+.sent {
+  margin: 0;
+  padding: 12px;
+  border-radius: 8px;
+  background: color.$green-100;
+  color: color.$green-600;
+  font-weight: 500;
+  text-align: center;
+}
+
+@media (max-width: 900px) {
+  .page {
+    padding: 16px 16px 48px;
+  }
+
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  // Phones: Grand Total and Submit first, right under the title.
+  .side-column {
+    order: -1;
+  }
+}

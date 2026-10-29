@@ -1,0 +1,30 @@
+<app-modal title="Guest Invite link" (closed)="closed.emit()">
+  <p class="text">Share this link with your guests so they can place their pre-orders</p>
+
+  <div class="field">
+    <label class="label" for="guest-invite-link">Invite Link</label>
+    <div class="input">
+      <input
+        id="guest-invite-link"
+        type="text"
+        readonly
+        [value]="link() ?? ''"
+        [placeholder]="loadFailed() ? 'Link is unavailable' : 'Generating link…'"
+      />
+      <button type="button" class="icon-button icon-button--small" aria-label="Copy invite link" [disabled]="!link()" (click)="copy()">
+        <img src="assets/svg/copy.svg" alt="" aria-hidden="true" />
+      </button>
+    </div>
+    <p class="hint">Copy this link, then paste it into a message to your guests.</p>
+  </div>
+
+  @if (copyFailed()) {
+    <div class="fallback" role="alert">
+      <p>Couldn't copy the link. Copy it manually:</p>
+      <code class="manual-link">{{ link() }}</code>
+    </div>
+  }
+  @if (loadFailed()) {
+    <p class="error" role="alert">Could not load the invite link. Please try again later.</p>
+  }
+</app-modal>

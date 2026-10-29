@@ -1,0 +1,174 @@
+@use 'app/shared/styles/abstracts/colors' as color;
+
+.guest {
+  padding: 16px 0;
+  border-bottom: 1px solid color.$neutral-200;
+}
+
+.guest-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 32px;
+}
+
+.guest-title {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 12px;
+  min-width: 0;
+}
+
+.guest-name {
+  min-width: 0;
+  margin: 0;
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 24px;
+  overflow-wrap: anywhere;
+
+  .guest--pending & {
+    color: color.$neutral-600;
+  }
+}
+
+.guest-amount {
+  font-size: 16px;
+  white-space: nowrap;
+}
+
+.guest-status {
+  color: color.$neutral-600;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.toggle {
+  display: inline-flex;
+  flex-shrink: 0;
+  padding: 4px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+
+  img {
+    width: 20px;
+    height: 20px;
+  }
+
+  &:focus-visible {
+    outline: 2px solid color.$green-600;
+  }
+}
+
+.guest-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.dishes {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dish {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+
+  &--editable {
+    grid-template-columns: auto minmax(0, 1fr) auto auto auto;
+  }
+
+  // Read-only rows keep the trash column empty, so prices stay under the guest total.
+  &:not(.dish--editable) {
+    padding-right: 40px;
+  }
+}
+
+.dish-name {
+  color: color.$neutral-600;
+  overflow-wrap: anywhere;
+}
+
+.dish-price {
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+// Same box as .toggle (28×28): prices line up with the guest total, and the target is above the 24×24 minimum.
+.trash {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+
+  img {
+    width: 18px;
+    height: 18px;
+  }
+
+  &:focus-visible {
+    outline: 2px solid color.$green-600;
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+}
+
+.link-button {
+  padding: 0 0 1px;
+  border: 0;
+  border-bottom: 1px solid currentColor;
+  background: transparent;
+  color: color.$neutral-600;
+  font: inherit;
+  font-size: 12px;
+  line-height: 18px;
+  white-space: nowrap;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    color: color.$red-400;
+  }
+
+  &:focus-visible {
+    outline: 2px solid color.$green-600;
+    outline-offset: 2px;
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+}
+
+@media (max-width: 520px) {
+  .dish--editable {
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+    row-gap: 6px;
+
+    app-quantity-stepper {
+      grid-column: 2;
+      grid-row: 2;
+    }
+  }
+}

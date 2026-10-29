@@ -1,0 +1,7 @@
+@if (dish().imageUrl) {
+  <img class="thumb" [src]="dish().imageUrl" alt="" [width]="size()" [height]="size()" />
+} @else {
+  <span class="thumb thumb--letter" aria-hidden="true" [style.width.px]="size()" [style.height.px]="size()">
+    {{ initial() }}
+  </span>
+}

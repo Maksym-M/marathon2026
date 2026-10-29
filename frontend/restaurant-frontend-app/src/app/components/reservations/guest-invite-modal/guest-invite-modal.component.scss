@@ -1,0 +1,61 @@
+@use 'app/shared/styles/abstracts/colors' as color;
+
+.text,
+.hint {
+  margin: 0;
+}
+
+.hint {
+  margin-top: 8px;
+  color: color.$neutral-600;
+  font-size: 12px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+}
+
+.label {
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+
+.input {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 8px 8px 16px;
+  border: 1px solid color.$neutral-200;
+  border-radius: 8px;
+
+  input {
+    flex: 1;
+    min-width: 0;
+    border: 0;
+    background: transparent;
+    font: inherit;
+    outline: none;
+  }
+}
+
+.fallback {
+  padding: 12px 16px;
+  border-radius: 8px;
+  background: color.$orange-100;
+
+  p {
+    margin: 0 0 8px;
+  }
+}
+
+.manual-link {
+  display: block;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+.error {
+  margin: 0;
+  color: color.$red-400;
+}

@@ -1,0 +1,85 @@
+@use 'app/shared/styles/abstracts/colors' as color;
+
+.summary-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid color.$neutral-200;
+}
+
+.section-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 500;
+  line-height: 32px;
+}
+
+.meta {
+  color: color.$neutral-600;
+  font-size: 12px;
+}
+
+.lines {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.line {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid color.$neutral-200;
+}
+
+.line-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.line-name {
+  font-size: 16px;
+  overflow-wrap: anywhere;
+}
+
+.line-shares {
+  color: color.$neutral-600;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.line-quantity {
+  color: color.$neutral-600;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.line-total {
+  min-width: 64px;
+  font-size: 16px;
+  font-weight: 500;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.empty {
+  padding: 48px 0;
+  text-align: center;
+}
+
+.empty-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.empty-text {
+  margin: 8px 0 0;
+  color: color.$neutral-600;
+}

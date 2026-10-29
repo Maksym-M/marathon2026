@@ -1,0 +1,34 @@
+<article class="item" [attr.aria-label]="item().dish.name">
+  <app-dish-thumb [dish]="item().dish" [size]="96" />
+
+  <div class="info">
+    <h4 class="name">{{ item().dish.name }}</h4>
+    <p class="hint">Expected ready time - 10 minutes</p>
+
+    @if (editable()) {
+      <app-quantity-stepper
+        [quantity]="item().quantity"
+        [label]="item().dish.name"
+        [disabled]="busy()"
+        (quantityChange)="quantityChange.emit($event)"
+      />
+    } @else {
+      <span class="quantity">Qty: {{ item().quantity }}</span>
+    }
+  </div>
+
+  <div class="side">
+    @if (editable()) {
+      <button
+        type="button"
+        class="trash"
+        [attr.aria-label]="'Remove ' + item().dish.name"
+        [disabled]="busy()"
+        (click)="removeClick.emit()"
+      >
+        <img src="assets/svg/trash.svg" alt="" aria-hidden="true" />
+      </button>
+    }
+    <span class="price">{{ lineTotal() | currency }}</span>
+  </div>
+</article>

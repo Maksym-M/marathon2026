@@ -1,0 +1,27 @@
+<div class="summary-header">
+  <h3 class="section-title">{{ heading() }}</h3>
+  @if (rows().length) {
+    <span class="meta">{{ summary().quantity }} {{ summary().quantity === 1 ? 'dish' : 'dishes' }} · most ordered first</span>
+  }
+</div>
+
+@if (rows().length) {
+  <ul class="lines">
+    @for (row of rows(); track row.dish.id) {
+      <li class="line">
+        <app-dish-thumb [dish]="row.dish" [size]="48" />
+        <div class="line-info">
+          <span class="line-name">{{ row.dish.name }}</span>
+          <span class="line-shares">{{ row.sharesLabel }}</span>
+        </div>
+        <span class="line-quantity">× {{ row.quantity }}</span>
+        <span class="line-total">{{ row.total | currency }}</span>
+      </li>
+    }
+  </ul>
+} @else {
+  <div class="empty">
+    <p class="empty-title">No dishes yet</p>
+    <p class="empty-text">Dishes appear here when participants submit their pre-orders.</p>
+  </div>
+}

@@ -1,0 +1,69 @@
+<article class="guest" [class.guest--pending]="!participant().isSubmitted" [attr.aria-label]="participant().name">
+  <div class="guest-header">
+    <div class="guest-title">
+      <h4 class="guest-name">{{ participant().name }}</h4>
+      @if (canRemove()) {
+        <button type="button" class="link-button" [attr.aria-label]="removeLabel()" [disabled]="busy()" (click)="removeClick.emit(participant())">
+          Remove Guest
+        </button>
+      }
+    </div>
+
+    @if (participant().isSubmitted) {
+      <span class="guest-amount">
+        @if (!expanded()) {
+          {{ dishCount() }} {{ dishCount() === 1 ? 'dish' : 'dishes' }} ·
+        }
+        {{ participant().total | currency }}
+      </span>
+      <button
+        type="button"
+        class="toggle"
+        [attr.aria-label]="toggleLabel()"
+        [attr.aria-expanded]="expanded()"
+        [attr.aria-controls]="bodyId()"
+        (click)="toggle()"
+      >
+        <img [src]="expanded() ? 'assets/svg/arrow-up.svg' : 'assets/svg/arrow-down.svg'" alt="" aria-hidden="true" />
+      </button>
+    } @else {
+      <span class="guest-status">Not submitted yet</span>
+    }
+  </div>
+
+  @if (participant().isSubmitted && expanded()) {
+    <div class="guest-body" [id]="bodyId()">
+      <ul class="dishes">
+        @for (item of participant().items; track item.dish.id) {
+          <li class="dish" [class.dish--editable]="editable()">
+            <app-dish-thumb [dish]="item.dish" [size]="40" />
+            @if (editable()) {
+              <span class="dish-name">{{ item.dish.name }}</span>
+              <app-quantity-stepper
+                [compact]="true"
+                [quantity]="item.quantity"
+                [label]="item.dish.name"
+                [disabled]="busy()"
+                (quantityChange)="changeQuantity(item, $event)"
+              />
+            } @else {
+              <span class="dish-name">{{ item.dish.name }} × {{ item.quantity }}</span>
+            }
+            <span class="dish-price">{{ lineTotal(item) | currency }}</span>
+            @if (editable()) {
+              <button
+                type="button"
+                class="trash"
+                [attr.aria-label]="'Remove ' + item.dish.name + ' from ' + participant().name + '\'s pre-order'"
+                [disabled]="busy()"
+                (click)="changeQuantity(item, 0)"
+              >
+                <img src="assets/svg/trash.svg" alt="" aria-hidden="true" />
+              </button>
+            }
+          </li>
+        }
+      </ul>
+    </div>
+  }
+</article>

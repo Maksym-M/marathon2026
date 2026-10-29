@@ -1,0 +1,138 @@
+@use 'app/shared/styles/abstracts/colors' as color;
+
+// Content width from the design; on wide screens the page is centred instead of stretching edge to edge.
+$content-width: 1184px;
+$gutter: 1.5rem;
+
+.page-content {
+  max-width: calc($content-width + 2 * $gutter);
+  margin: 0 auto;
+}
+
+.subheading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  // The greeting lines up with the centred content; the green band stays full width.
+  padding: 2rem max($gutter, (100% - $content-width) / 2);
+
+  background-color: color.$bg-green;
+
+  @media (max-width: 540px) {
+    padding: 1rem;
+  }
+}
+
+.reservation-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+
+  margin: 0;
+  padding: 1.5rem;
+
+  list-style: none;
+
+  @media (max-width: 540px) {
+    padding: 1rem;
+  }
+}
+
+.reservation-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+
+  margin-top: 2rem;
+  padding: 1.5rem;
+
+  color: color.$neutral-900;
+  font-size: 1.25rem;
+  text-align: center;
+
+  img {
+    width: 135px;
+    height: 135px;
+
+    @media (max-width: 540px) {
+      width: 88px;
+      height: 88px;
+    }
+  }
+}
+
+.greeting {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 500;
+  line-height: 40px;
+}
+
+// Secondary info above the tabs: easy to find, and it doesn't split a tab from its list.
+.assistance {
+  margin: 1.5rem 1.5rem 0;
+  color: color.$neutral-600;
+  font-size: 14px;
+
+  a {
+    color: color.$green-600;
+    font-weight: 500;
+    white-space: nowrap;
+  }
+}
+
+.dialog-text {
+  margin: 0;
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 16px;
+  width: 100%;
+}
+
+// US20 AC2: "Upcoming" / "Past & Cancelled".
+.tabs {
+  display: flex;
+  gap: 8px;
+  margin: 1.5rem 1.5rem 0;
+}
+
+.tab {
+  padding: 8px 24px;
+  border: 0;
+  border-bottom: 2px solid color.$neutral-200;
+  background: transparent;
+  color: color.$neutral-900;
+  font: inherit;
+  font-size: 16px;
+  white-space: nowrap;
+  cursor: pointer;
+
+  @media (max-width: 540px) {
+    flex: 1;
+    padding: 8px;
+    font-size: 14px;
+  }
+
+  &[aria-selected='true'] {
+    border-bottom-color: color.$green-600;
+    color: color.$green-600;
+  }
+
+  &:focus-visible {
+    outline: 2px solid color.$green-600;
+    outline-offset: 2px;
+  }
+}
+
+.empty-title {
+  margin: 0;
+}
+
+.reservation-empty p {
+  margin: 0;
+}

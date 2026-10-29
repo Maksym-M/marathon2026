@@ -1,0 +1,213 @@
+<div class="backdrop">
+  <button type="button" class="backdrop-dismiss" tabindex="-1" aria-hidden="true" (click)="close()"></button>
+
+  <aside class="drawer" role="dialog" aria-modal="true" aria-labelledby="group-cart-title">
+    <header class="drawer-header">
+      <h2 id="group-cart-title" class="drawer-title">Cart</h2>
+      <button type="button" class="icon-button icon-button--small drawer-close" aria-label="Close cart" (click)="close()">
+        <img src="assets/svg/close.svg" alt="" aria-hidden="true" />
+      </button>
+
+      @if (store.invite(); as invite) {
+        <ul class="reservation" aria-label="Reservation">
+          <li><img src="assets/svg/location-green.svg" alt="" aria-hidden="true" width="16" height="16" />{{ invite.LocationAddress }}</li>
+          <li><img src="assets/svg/calendar-green.svg" alt="" aria-hidden="true" width="16" height="16" />{{ invite.StartTime | date: 'MMM d, y' }}</li>
+          <li>
+            <img src="assets/svg/clock-green.svg" alt="" aria-hidden="true" width="16" height="16" />
+            {{ invite.StartTime | date: 'HH:mm' }} - {{ invite.EndTime | date: 'HH:mm' }}
+          </li>
+          <li><img src="assets/svg/people-green.svg" alt="" aria-hidden="true" width="16" height="16" />{{ invite.MaxGuestCount }} Guests</li>
+        </ul>
+      }
+    </header>
+
+    @switch (store.loadState()) {
+      @case ('loading') {
+        <p class="state" role="status">Loading pre-orders…</p>
+      }
+      @case ('not-found') {
+        <div class="state" role="alert">
+          <p class="state-title">You don't have access to this reservation.</p>
+          <a class="button button--secondary button--small" routerLink="/reservations">Go to my Reservations</a>
+        </div>
+      }
+      @case ('error') {
+        <div class="state" role="alert">
+          <p class="state-title">We couldn't load group pre-orders. Please try again.</p>
+          <button type="button" class="button button--secondary button--small" (click)="store.reload()">Try Again</button>
+        </div>
+      }
+      @case ('ready') {
+        <div class="tabs" role="tablist" aria-label="Cart view">
+          <button
+            type="button"
+            role="tab"
+            id="group-cart-tab-participants"
+            class="tab"
+            aria-controls="group-cart-panel-participants"
+            [attr.aria-selected]="activeTab() === 'participants'"
+            [tabindex]="activeTab() === 'participants' ? 0 : -1"
+            (click)="selectTab('participants')"
+            (keydown.arrowRight)="switchTab()"
+            (keydown.arrowLeft)="switchTab()"
+          >
+            Participants
+          </button>
+          <button
+            type="button"
+            role="tab"
+            id="group-cart-tab-summary"
+            class="tab"
+            aria-controls="group-cart-panel-summary"
+            [attr.aria-selected]="activeTab() === 'summary'"
+            [tabindex]="activeTab() === 'summary' ? 0 : -1"
+            (click)="selectTab('summary')"
+            (keydown.arrowRight)="switchTab()"
+            (keydown.arrowLeft)="switchTab()"
+          >
+            Dish Summary
+          </button>
+        </div>
+
+        <div class="drawer-content">
+          @if (store.isOpen() && store.isLocked()) {
+            <p class="lock-banner" role="status">Less than 30 minutes before the reservation time. No changes can be applied.</p>
+          }
+          <section
+            id="group-cart-panel-participants"
+            role="tabpanel"
+            aria-labelledby="group-cart-tab-participants"
+            [hidden]="activeTab() !== 'participants'"
+          >
+            <section class="my-pre-order" aria-labelledby="my-pre-order-title">
+              <h3 id="my-pre-order-title" class="section-title">My Pre-Order</h3>
+
+              @if (store.me(); as me) {
+                @if (me.items.length) {
+                  <ul class="my-items">
+                    @for (item of me.items; track item.dish.id) {
+                      <li>
+                        <app-my-pre-order-item
+                          [item]="item"
+                          [editable]="store.canEditParticipant(me)"
+                          [busy]="store.isBusy(me.id)"
+                          (quantityChange)="changeMyQuantity(me, item, $event)"
+                          (removeClick)="changeMyQuantity(me, item, 0)"
+                        />
+                      </li>
+                    }
+                  </ul>
+                } @else {
+                  <div class="my-empty">
+                    <p class="my-empty-title">Your cart is empty</p>
+                    <p class="my-empty-text">Add dishes from the menu to pre-order them for the table.</p>
+                    @if (store.canEdit()) {
+                      <button type="button" class="button button--secondary button--small" (click)="openMenu()">Browse Menu</button>
+                    }
+                  </div>
+                }
+              }
+            </section>
+
+            @if (store.guestSeats() > 0) {
+              <section class="guests" aria-labelledby="guests-title">
+                <div class="guests-header">
+                  <h3 id="guests-title" class="section-title">Guests' pre-orders</h3>
+                  <div class="sync">
+                    <span class="sync-meta">
+                      {{ store.submittedGuests() }} of {{ store.guestSeats() }} submitted
+                      @if (store.updatedAt(); as updatedAt) {
+                        · Updated {{ updatedAt | date: 'HH:mm' }}
+                      }
+                    </span>
+                    @if (store.isOpen()) {
+                      <button
+                        type="button"
+                        class="refresh"
+                        aria-label="Refresh"
+                        [class.refresh--spinning]="store.refreshState() === 'refreshing'"
+                        [disabled]="store.refreshState() === 'refreshing'"
+                        (click)="store.refresh()"
+                      >
+                        <img src="assets/svg/refresh.svg" alt="" aria-hidden="true" />
+                      </button>
+                    }
+                  </div>
+                </div>
+
+                <p class="sync-error" role="status">
+                  @if (store.refreshState() === 'failed') {
+                    Couldn't refresh. Showing data from {{ store.updatedAt() | date: 'HH:mm' }}.
+                  }
+                </p>
+
+                <ul class="guest-list">
+                  @for (guest of store.guests(); track guest.id) {
+                    <li>
+                      <app-guest-pre-order
+                        [participant]="guest"
+                        [editable]="store.canEditParticipant(guest)"
+                        [canRemove]="store.canEdit()"
+                        [busy]="store.isBusy(guest.id)"
+                        (quantityChange)="changeGuestQuantity(guest, $event)"
+                        (removeClick)="store.ask({ kind: 'removeGuest', guest: $event })"
+                      />
+                    </li>
+                  }
+                  @if (store.canEdit() && store.openSeats() > 0) {
+                    <li class="open-seats">
+                      <span class="open-seats-label">
+                        {{ seatsLabel() }}
+                        <button type="button" class="link-button link-button--quiet" (click)="store.ask({ kind: 'removeSeat' })">
+                          Remove seat
+                        </button>
+                      </span>
+                      @if (store.inviteLink()) {
+                        <button type="button" class="link-button" (click)="store.copyInviteLink()">Invite Guests</button>
+                      }
+                    </li>
+                  }
+                </ul>
+              </section>
+            }
+          </section>
+
+          <section
+            id="group-cart-panel-summary"
+            role="tabpanel"
+            aria-labelledby="group-cart-tab-summary"
+            [hidden]="activeTab() !== 'summary'"
+          >
+            <app-dish-summary [summary]="store.dishSummary()" [meId]="store.me()?.id ?? null" />
+          </section>
+        </div>
+
+        <footer class="drawer-footer">
+          <div class="total">
+            <span class="total-label">Grand Total</span>
+            <span class="total-value">{{ store.grandTotal() | currency }}</span>
+          </div>
+          <p class="total-hint">{{ totalHint() }}</p>
+
+          @if (store.isOpen()) {
+            <button
+              type="button"
+              class="button button--primary button--large button--full-width"
+              [disabled]="!store.canSubmit()"
+              (click)="store.ask({ kind: 'submit' })"
+            >
+              Submit Pre-Order
+            </button>
+          } @else {
+            <p class="sent" role="status">
+              <img src="assets/svg/check-circle.svg" alt="" aria-hidden="true" width="20" height="20" />
+              Sent to Restaurant
+            </p>
+          }
+        </footer>
+      }
+    }
+  </aside>
+</div>
+
+<app-group-order-dialogs />

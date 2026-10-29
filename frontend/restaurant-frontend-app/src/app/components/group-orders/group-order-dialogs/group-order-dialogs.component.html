@@ -1,0 +1,69 @@
+@if (store.pendingAction(); as action) {
+  @switch (action.kind) {
+    @case ('submit') {
+      <app-modal title="Submit pre-order?" [closeOnBackdrop]="!store.actionRunning()" (closed)="store.cancelAction()">
+        <p class="dialog-text">The restaurant will receive {{ dishCountLabel() }} for {{ store.grandTotal() | currency }}.</p>
+        @if (store.pendingGuests() > 0) {
+          <p class="dialog-warning">{{ pendingWarning() }}</p>
+        }
+        <div modal-actions class="dialog-actions">
+          <button type="button" class="button button--secondary button--small" [disabled]="store.actionRunning()" (click)="store.cancelAction()">
+            Cancel
+          </button>
+          <button type="button" class="button button--primary button--small" [disabled]="store.actionRunning()" (click)="store.confirmAction()">
+            {{ store.actionRunning() ? 'Submitting…' : 'Submit' }}
+          </button>
+        </div>
+      </app-modal>
+    }
+    @case ('removeGuest') {
+      @if (action.kind === 'removeGuest') {
+        <app-modal title="Remove guest?" [closeOnBackdrop]="!store.actionRunning()" (closed)="store.cancelAction()">
+          <p class="dialog-text">
+            Are you sure you want to remove <strong>{{ action.guest.name }}</strong> and their pre-order from this reservation?
+            This action cannot be undone.
+          </p>
+          <div modal-actions class="dialog-actions">
+            <button type="button" class="button button--secondary button--small" [disabled]="store.actionRunning()" (click)="store.cancelAction()">
+              Cancel
+            </button>
+            <button type="button" class="button button--primary button--small" [disabled]="store.actionRunning()" (click)="store.confirmAction()">
+              {{ store.actionRunning() ? 'Removing…' : 'Remove Guest' }}
+            </button>
+          </div>
+        </app-modal>
+      }
+    }
+    @case ('removeDish') {
+      @if (action.kind === 'removeDish') {
+        <app-modal title="Remove dish?" [closeOnBackdrop]="!store.actionRunning()" (closed)="store.cancelAction()">
+          <p class="dialog-text">
+            Remove <strong>{{ action.item.dish.name }}</strong> from {{ action.guest.name }}'s pre-order? You can't add it back
+            for them.
+          </p>
+          <div modal-actions class="dialog-actions">
+            <button type="button" class="button button--secondary button--small" [disabled]="store.actionRunning()" (click)="store.cancelAction()">
+              Cancel
+            </button>
+            <button type="button" class="button button--primary button--small" [disabled]="store.actionRunning()" (click)="store.confirmAction()">
+              {{ store.actionRunning() ? 'Removing…' : 'Remove' }}
+            </button>
+          </div>
+        </app-modal>
+      }
+    }
+    @case ('removeSeat') {
+      <app-modal title="Remove an empty seat?" [closeOnBackdrop]="!store.actionRunning()" (closed)="store.cancelAction()">
+        <p class="dialog-text">{{ seatRemovalText() }}</p>
+        <div modal-actions class="dialog-actions">
+          <button type="button" class="button button--secondary button--small" [disabled]="store.actionRunning()" (click)="store.cancelAction()">
+            Cancel
+          </button>
+          <button type="button" class="button button--primary button--small" [disabled]="store.actionRunning()" (click)="store.confirmAction()">
+            {{ store.actionRunning() ? 'Removing…' : 'Remove seat' }}
+          </button>
+        </div>
+      </app-modal>
+    }
+  }
+}

@@ -1,0 +1,59 @@
+<div class="modal-backdrop" role="presentation" tabindex="0" (click)="onClose()" (keydown.enter)="onClose()">
+  <div
+    #modal
+    class="feedback-wrapper"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="feedback-title"
+    (click)="$event.stopPropagation()"
+    (keydown.enter)="$event.stopPropagation()"
+  >
+    <div class="header-feedback">
+      <h3 id="feedback-title" class="feedback-title">Give Feedback</h3>
+      <button type="button" class="close-btn" aria-label="Close" (click)="onClose()">
+        <img src="assets/svg/close.svg" alt="" />
+      </button>
+    </div>
+    <p class="subtitle">Please rate your experience below</p>
+
+    @if (showServiceForm) {
+      <section class="rating-block" aria-labelledby="feedback-service-title">
+        <h4 id="feedback-service-title" class="rating-title">Service</h4>
+        <div class="waiter-info">
+          <img [src]="waiterProfileImage" alt="" class="avatar" />
+          <div>
+            <p class="waiter-name">{{ waiterName }}</p>
+            <p class="role">Waiter</p>
+          </div>
+        </div>
+        <div class="rating-line">
+          <app-rating [rating]="serviceRating" (ratingChange)="serviceRating = $event" />
+          <span class="rating">{{ serviceRating ? serviceRating + '/5 stars' : 'Not rated' }}</span>
+        </div>
+      </section>
+    }
+
+    @if (showCuisineForm) {
+      <section class="rating-block" aria-labelledby="feedback-cuisine-title">
+        <h4 id="feedback-cuisine-title" class="rating-title">Culinary Experience</h4>
+        <div class="rating-line">
+          <app-rating [rating]="cuisineRating" (ratingChange)="cuisineRating = $event" />
+          <span class="rating">{{ cuisineRating ? cuisineRating + '/5 stars' : 'Not rated' }}</span>
+        </div>
+      </section>
+    }
+
+    <label class="comment-label" for="feedback-comment">Comment (optional)</label>
+    <textarea id="feedback-comment" placeholder="Add your comments" [(ngModel)]="comment"></textarea>
+
+    @if (isUpdate) {
+      <app-custom-button [disabled]="!hasRating" (click)="onUpdateFeedback()" class="edit-confirmed-btn">
+        Update Feedback
+      </app-custom-button>
+    } @else {
+      <app-custom-button [disabled]="!hasRating" (click)="onSubmitFeedback()" class="edit-confirmed-btn">
+        Submit Feedback
+      </app-custom-button>
+    }
+  </div>
+</div>

@@ -1,0 +1,53 @@
+<article class="panel" [class.panel--pending]="!submitted()" [attr.aria-labelledby]="headingId()">
+  <header class="panel-header">
+    <span class="avatar" aria-hidden="true">{{ initial() }}</span>
+    <h3 class="panel-title" [id]="headingId()">{{ heading() }}</h3>
+    <div class="panel-actions">
+      <ng-content select="[panel-actions]" />
+      @if (canRemove()) {
+        <button type="button" class="link-button" [attr.aria-label]="removeLabel()" [disabled]="busy()" (click)="removeClick.emit(participant())">
+          Remove Guest
+        </button>
+      }
+    </div>
+    <span class="status" [class.status--submitted]="submitted()">{{ statusLabel() }}</span>
+  </header>
+
+  @if (submitted()) {
+    <ul class="lines">
+      @for (item of lines(); track item.dish.id) {
+        <li class="line" [class.line--editable]="editable()">
+          <app-dish-thumb [dish]="item.dish" [size]="32" />
+          @if (editable()) {
+            <span class="line-name">{{ item.dish.name }}</span>
+            <app-quantity-stepper
+              [compact]="true"
+              [quantity]="item.quantity"
+              [label]="item.dish.name"
+              [disabled]="busy()"
+              (quantityChange)="changeQuantity(item, $event)"
+            />
+          } @else {
+            <span class="line-name">{{ item.dish.name }} × {{ item.quantity }}</span>
+          }
+          <span class="line-price">{{ lineTotal(item) | currency }}</span>
+          @if (editable()) {
+            <button
+              type="button"
+              class="trash"
+              [attr.aria-label]="'Remove ' + item.dish.name + ' from ' + heading()"
+              [disabled]="busy()"
+              (click)="changeQuantity(item, 0)"
+            >
+              <img src="assets/svg/trash.svg" alt="" aria-hidden="true" width="18" height="18" />
+            </button>
+          }
+        </li>
+      }
+    </ul>
+    <div class="subtotal" [class.subtotal--editable]="editable()">
+      <span>Subtotal</span>
+      <span>{{ participant().total | currency }}</span>
+    </div>
+  }
+</article>

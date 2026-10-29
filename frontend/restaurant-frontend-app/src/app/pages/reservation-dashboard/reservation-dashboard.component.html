@@ -1,0 +1,164 @@
+<app-header />
+
+<div class="subheading">
+  <h1 class="greeting">Hello, {{ firstName() }} {{ lastName() }}</h1>
+</div>
+
+<div class="page-content">
+  @if (reservationsLoaded()) {
+    <p class="assistance">
+      For any assistance with your table reservation or pre-order, please call us at this number:
+      <a href="tel:+1234456788990">+123 445 678 8990</a>.
+    </p>
+  }
+
+  @if (!reservationsLoaded()) {
+    <p class="reservation-empty">
+      Please wait while we load your reservations.
+    </p>
+  } @else if (reservations().length === 0) {
+    <div class="reservation-empty">
+      <img
+        src="assets/svg/empty-reservations.svg"
+        alt=""
+        aria-hidden="true"
+      />
+
+      <h4 class="empty-title">No Reservations</h4>
+      <p>Looks like you haven't made any reservations yet.</p>
+
+      <a
+        class="button button--primary button--large"
+        routerLink="/tables"
+      >
+        Book a Table
+      </a>
+    </div>
+  } @else {
+    <div class="tabs" role="tablist" aria-label="Reservations">
+      <button
+        type="button"
+        role="tab"
+        id="reservations-tab-upcoming"
+        class="tab"
+        aria-controls="reservations-panel"
+        [attr.aria-selected]="activeTab() === 'upcoming'"
+        [tabindex]="activeTab() === 'upcoming' ? 0 : -1"
+        (click)="selectTab('upcoming')"
+        (keydown.arrowRight)="switchTab()"
+        (keydown.arrowLeft)="switchTab()"
+      >
+        Upcoming ({{ tabs().upcoming.length }})
+      </button>
+      <button
+        type="button"
+        role="tab"
+        id="reservations-tab-past"
+        class="tab"
+        aria-controls="reservations-panel"
+        [attr.aria-selected]="activeTab() === 'past'"
+        [tabindex]="activeTab() === 'past' ? 0 : -1"
+        (click)="selectTab('past')"
+        (keydown.arrowRight)="switchTab()"
+        (keydown.arrowLeft)="switchTab()"
+      >
+        Past &amp; Cancelled ({{ tabs().past.length }})
+      </button>
+    </div>
+
+    <div id="reservations-panel" role="tabpanel" [attr.aria-labelledby]="'reservations-tab-' + activeTab()">
+      @if (visibleReservations().length > 0) {
+        <ul class="reservation-list">
+          @for (reservation of visibleReservations(); track reservation.id) {
+            <app-card-reservation
+              [r]="reservation"
+              [role]="role()"
+              layout="row"
+              [statusEnum]="statusEnum"
+              (cancelReservation)="askToCancel($event)"
+              (editReservation)="openEditModal($event)"
+              (leaveFeedbackReservation)="openFeedback($event)"
+              (updateFeedbackReservation)="openFeedback($event)"
+            />
+          }
+        </ul>
+      } @else if (activeTab() === 'upcoming') {
+        <div class="reservation-empty">
+          <p>You have no upcoming reservations.</p>
+          <a class="button button--primary button--large" routerLink="/tables">Book a Table</a>
+        </div>
+      } @else {
+        <p class="reservation-empty">No past or cancelled reservations.</p>
+      }
+    </div>
+  }
+</div>
+
+@if (reservationToCancel(); as reservation) {
+  <app-modal title="Cancel reservation?" (closed)="reservationToCancel.set(null)">
+    <p class="dialog-text">
+      Your reservation at <strong>{{ reservation.locationAddress }}</strong> on
+      {{ reservation.startTime | date: 'EEE, MMM d' }} at {{ reservation.startTime | date: 'HH:mm' }} will be cancelled.
+      @if (reservation.guestCount > 1) {
+        Guests who joined your group pre-order will lose access to it.
+      }
+    </p>
+    <div modal-actions class="dialog-actions">
+      <button type="button" class="button button--secondary button--small" (click)="reservationToCancel.set(null)">
+        Keep Reservation
+      </button>
+      <button type="button" class="button button--primary button--small" (click)="confirmCancel(reservation.id)">
+        Cancel Reservation
+      </button>
+    </div>
+  </app-modal>
+}
+
+@if (
+  showEditReservationModal() &&
+  selectedReservation() &&
+  selectedTable() &&
+  selectedTimeRange()
+  ) {
+  <app-make-reservation
+    title="Edit Reservation"
+    [table]="selectedTable()!"
+    [guests]="selectedReservation()!.guestCount"
+    [selectedTimeRange]="selectedTimeRange()!"
+    [locationName]="selectedReservation()!.locationAddress"
+    (makeReservation)="
+      onSubmitEditReservation(
+        $event.timeRange,
+        $event.guests
+      )
+    "
+    (closeModal)="closeEditReservationModal()"
+  />
+}
+
+@if (
+  showEditReservationConfirmed() &&
+  selectedReservationAsReservation()
+  ) {
+  <app-reservation-confirmed
+    [reservation]="selectedReservationAsReservation()!"
+    (closed)="closeReservationConfirmed()"
+    (editReservation)="editConfirmedReservation()"
+    (cancelReservation)="cancelConfirmedReservation()"
+  />
+}
+
+@if (
+  showFeedbackModal() &&
+  selectedReservation() &&
+  selectedReservationAsReservation()
+  ) {
+  <app-feedback-window
+    [feedbackForUpdate]="selectedReservation()!.feedback"
+    [selectedReservation]="
+      selectedReservationAsReservation()!
+    "
+    (feedbackUpdated)="onFeedbackUpdated($event)"
+    (closedFeedback)="closeFeedback()"
+  />
+}

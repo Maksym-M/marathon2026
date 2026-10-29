@@ -1,0 +1,23 @@
+<div class="stepper" role="group" [attr.aria-label]="'Quantity of ' + label()">
+  <button
+    type="button"
+    class="step"
+    [attr.aria-label]="'Decrease ' + label()"
+    [disabled]="disabled() || quantity() <= 1"
+    (click)="decrease()"
+  >
+    <img src="assets/svg/minus-green.svg" alt="" aria-hidden="true" />
+  </button>
+
+  <span class="value" aria-live="polite">{{ quantity() }}</span>
+
+  <button
+    type="button"
+    class="step step--active"
+    [attr.aria-label]="'Increase ' + label()"
+    [disabled]="disabled()"
+    (click)="increase()"
+  >
+    <img src="assets/svg/plus-green.svg" alt="" aria-hidden="true" />
+  </button>
+</div>

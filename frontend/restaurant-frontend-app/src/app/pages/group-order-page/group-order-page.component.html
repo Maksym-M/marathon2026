@@ -1,0 +1,186 @@
+<main class="page">
+  <a class="back-link" routerLink="/reservations">← Back to Reservations</a>
+
+  <div class="title-row">
+    <h1 class="title">Group Pre-Order</h1>
+    @if (view() === 'ready') {
+      <span class="badge" [class.badge--sent]="!store.isOpen()">{{ statusBadge() }}</span>
+    }
+  </div>
+
+  @switch (view()) {
+    @case ('loading') {
+      <p class="state" role="status">Loading group pre-orders…</p>
+    }
+    @case ('not-found') {
+      <div class="state" role="alert">
+        <p>You don't have access to this reservation.</p>
+        <a class="button button--secondary button--small" routerLink="/reservations">Go to my Reservations</a>
+      </div>
+    }
+    @case ('error') {
+      <div class="state" role="alert">
+        <p>We couldn't load group pre-orders. Please try again.</p>
+        <button type="button" class="button button--secondary button--small" (click)="retry()">Try Again</button>
+      </div>
+    }
+    @case ('cancelled') {
+      <p class="state">This reservation has been cancelled. Group pre-orders are no longer available.</p>
+    }
+    @case ('passed') {
+      <p class="state">Your pre-order has been passed to the restaurant. For any changes, please ask your waiter.</p>
+    }
+    @case ('single') {
+      <p class="state">Group pre-orders are available for reservations with 2 or more guests.</p>
+    }
+    @case ('ready') {
+      @if (store.isOpen() && store.isLocked()) {
+        <p class="banner" role="status">Less than 30 minutes before the reservation time. No changes can be applied.</p>
+      }
+
+      <div class="layout">
+        <div class="main-column">
+          @if (store.invite(); as invite) {
+            <section class="card details" aria-label="Reservation">
+              <dl>
+                <dt>Restaurant</dt>
+                <dd>{{ invite.RestaurantName }}</dd>
+                <dt>Location</dt>
+                <dd>{{ invite.LocationAddress }}, Table {{ invite.TableNumber }}</dd>
+                <dt>Date</dt>
+                <dd>{{ invite.StartTime | date: 'MMM d, y' }}</dd>
+                <dt>Time</dt>
+                <dd>{{ invite.StartTime | date: 'HH:mm' }} - {{ invite.EndTime | date: 'HH:mm' }}</dd>
+                <dt>Guests</dt>
+                <dd>{{ invite.MaxGuestCount }} {{ invite.MaxGuestCount === 1 ? 'person' : 'people' }}</dd>
+              </dl>
+            </section>
+          }
+
+          <section aria-labelledby="participants-title">
+            <div class="section-head">
+              <h2 id="participants-title" class="section-title">Participants</h2>
+              <span class="meta">{{ store.participants().length }} of {{ seats() }} joined</span>
+            </div>
+
+            <div class="card progress-card">
+              <div class="progress-head">
+                <strong>{{ submittedCount() }} of {{ seats() }} submitted</strong>
+                <span class="sync">
+                  @if (store.updatedAt(); as updatedAt) {
+                    <span class="meta">Last updated: {{ updatedAt | date: 'HH:mm' }}</span>
+                  }
+                  @if (store.isOpen()) {
+                    <button
+                      type="button"
+                      class="button button--secondary button--small"
+                      [disabled]="store.refreshState() === 'refreshing'"
+                      (click)="store.refresh()"
+                    >
+                      {{ store.refreshState() === 'refreshing' ? 'Refreshing…' : 'Refresh' }}
+                    </button>
+                  }
+                </span>
+              </div>
+              <div
+                class="progress"
+                role="progressbar"
+                aria-label="Pre-orders submitted"
+                aria-valuemin="0"
+                [attr.aria-valuemax]="seats()"
+                [attr.aria-valuenow]="submittedCount()"
+              >
+                <span class="progress-fill" [style.width.%]="progressPercent()"></span>
+              </div>
+              <p class="sync-error" role="status">
+                @if (store.refreshState() === 'failed') {
+                  Couldn't refresh. Please try again.
+                }
+              </p>
+            </div>
+
+            <ul class="participants">
+              @if (store.me(); as me) {
+                <li>
+                  <app-participant-panel
+                    [participant]="me"
+                    heading="My Pre-Order"
+                    [editable]="store.canEditParticipant(me)"
+                    [busy]="store.isBusy(me.id)"
+                    (quantityChange)="changeQuantity(me, $event)"
+                  >
+                    @if (store.canEdit()) {
+                      <a panel-actions class="add-link" routerLink="/menu" [queryParams]="menuQueryParams()">Add dishes</a>
+                    }
+                  </app-participant-panel>
+                </li>
+              }
+              @for (guest of store.guests(); track guest.id) {
+                <li>
+                  <app-participant-panel
+                    [participant]="guest"
+                    [heading]="guestHeading(guest)"
+                    [editable]="store.canEditParticipant(guest)"
+                    [canRemove]="store.canEdit()"
+                    [busy]="store.isBusy(guest.id)"
+                    (quantityChange)="changeQuantity(guest, $event)"
+                    (removeClick)="store.ask({ kind: 'removeGuest', guest: $event })"
+                  />
+                </li>
+              }
+              @for (slot of openSeatSlots(); track slot) {
+                <li>
+                  <article class="card placeholder" aria-label="Seat nobody has joined yet">
+                    <span class="avatar" aria-hidden="true">?</span>
+                    <h3 class="placeholder-title">Guest</h3>
+                    @if (store.canEdit()) {
+                      <span class="placeholder-actions">
+                        @if (store.inviteLink()) {
+                          <button type="button" class="link-button" (click)="store.copyInviteLink()">Invite Guests</button>
+                        }
+                        <button type="button" class="link-button link-button--quiet" (click)="store.ask({ kind: 'removeSeat' })">
+                          Remove seat
+                        </button>
+                      </span>
+                    }
+                    <span class="status">Not joined</span>
+                  </article>
+                </li>
+              }
+            </ul>
+          </section>
+        </div>
+
+        <aside class="side-column">
+          <section class="card total-card" aria-label="Grand Total">
+            <div class="total">
+              <span class="total-label">Grand Total</span>
+              <span class="total-value">{{ store.grandTotal() | currency }}</span>
+            </div>
+            <p class="meta">Excludes taxes and service charges.</p>
+            @if (store.isOpen()) {
+              <button
+                type="button"
+                class="button button--primary button--large button--full-width"
+                [disabled]="!store.canSubmit()"
+                (click)="store.ask({ kind: 'submit' })"
+              >
+                Submit Pre-Order
+              </button>
+            } @else {
+              <p class="sent" role="status">Sent to Restaurant</p>
+            }
+          </section>
+
+          @if (store.dishSummary().lines.length) {
+            <section class="card">
+              <app-dish-summary heading="Dish Summary" [summary]="store.dishSummary()" [meId]="store.me()?.id ?? null" />
+            </section>
+          }
+        </aside>
+      </div>
+    }
+  }
+</main>
+
+<app-group-order-dialogs />

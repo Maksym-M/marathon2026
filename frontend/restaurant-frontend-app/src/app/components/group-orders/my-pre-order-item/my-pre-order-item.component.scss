@@ -1,0 +1,85 @@
+@use 'app/shared/styles/abstracts/colors' as color;
+
+.item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  border-radius: 12px;
+  background: color.$neutral-0;
+  box-shadow: 0 0 10px 4px color.$shadow;
+}
+
+.info {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+}
+
+.name {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 20px;
+  overflow-wrap: anywhere;
+}
+
+.hint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.quantity {
+  color: color.$neutral-600;
+}
+
+.side {
+  display: flex;
+  flex-direction: column;
+  align-self: stretch;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.trash {
+  display: inline-flex;
+  padding: 4px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+
+  img {
+    width: 22px;
+    height: 22px;
+  }
+
+  &:focus-visible {
+    outline: 2px solid color.$green-600;
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+}
+
+.price {
+  margin-top: auto;
+  color: color.$green-600;
+  font-size: 18px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+@media (max-width: 520px) {
+  .item {
+    gap: 12px;
+    padding: 12px;
+  }
+}

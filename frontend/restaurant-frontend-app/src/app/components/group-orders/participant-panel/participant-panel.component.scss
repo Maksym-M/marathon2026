@@ -1,0 +1,178 @@
+@use 'app/shared/styles/abstracts/colors' as color;
+
+.panel {
+  padding: 20px 24px;
+  border-radius: 16px;
+  background: color.$neutral-0;
+  box-shadow: 0 0 10px 4px color.$shadow;
+}
+
+.panel-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.avatar {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: color.$green-100;
+  color: color.$green-600;
+  font-weight: 500;
+
+  .panel--pending & {
+    background: color.$neutral-100;
+    color: color.$neutral-600;
+  }
+}
+
+.panel-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 500;
+  line-height: 28px;
+  overflow-wrap: anywhere;
+
+  .panel--pending & {
+    color: color.$neutral-600;
+  }
+}
+
+.panel-actions {
+  display: flex;
+  flex: 1;
+  gap: 12px;
+}
+
+.status {
+  padding: 2px 10px;
+  border-radius: 12px;
+  background: color.$neutral-100;
+  color: color.$neutral-600;
+  font-size: 12px;
+  white-space: nowrap;
+
+  &--submitted {
+    background: color.$green-100;
+    color: color.$green-600;
+  }
+}
+
+.lines {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 16px 0 0;
+  padding: 16px 0 0;
+  border-top: 1px solid color.$neutral-200;
+  list-style: none;
+}
+
+// Trash column = 28px, so prices line up with the Subtotal whether the panel is editable or not.
+.line {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+
+  &--editable {
+    grid-template-columns: auto minmax(0, 1fr) auto auto 28px;
+  }
+}
+
+.line-name {
+  color: color.$neutral-600;
+  overflow-wrap: anywhere;
+}
+
+.line-price {
+  white-space: nowrap;
+}
+
+.trash {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background: color.$red-30;
+  }
+
+  &:focus-visible {
+    outline: 2px solid color.$green-600;
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+}
+
+.subtotal {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px dashed color.$neutral-200;
+  font-weight: 500;
+
+  &--editable {
+    padding-right: 40px;
+  }
+}
+
+.link-button {
+  padding: 0;
+  border: 0;
+  border-bottom: 1px solid currentColor;
+  background: transparent;
+  color: color.$neutral-600;
+  font: inherit;
+  font-size: 12px;
+  line-height: 18px;
+  white-space: nowrap;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    color: color.$red-400;
+  }
+
+  &:focus-visible {
+    outline: 2px solid color.$green-600;
+    outline-offset: 2px;
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+}
+
+@media (max-width: 520px) {
+  .panel {
+    padding: 16px;
+  }
+
+  .line--editable {
+    grid-template-columns: auto minmax(0, 1fr) auto 28px;
+    row-gap: 6px;
+
+    app-quantity-stepper {
+      grid-column: 2;
+      grid-row: 2;
+    }
+  }
+}

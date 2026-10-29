@@ -1,0 +1,62 @@
+@use 'app/shared/styles/abstracts/colors' as color;
+
+$icon-size: 24px;
+
+:host {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  width: 100%;
+  gap: 10px;
+}
+
+// Icon on the left, text column on the right — with or without a title.
+.toast-content {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+}
+
+.toast-icon {
+  flex-shrink: 0;
+  width: $icon-size;
+  height: $icon-size;
+}
+
+// At least as tall as the icon and centred, so a one-line message sits on the icon's line.
+.toast-text {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  min-width: 0;
+  min-height: $icon-size;
+}
+
+.toast-title {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.toast-message {
+  font-size: 13px;
+  line-height: 1.4;
+  white-space: pre-line;
+  overflow-wrap: break-word;
+}
+
+.toast-close {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  height: $icon-size;
+  padding: 0;
+  border: none;
+  background: none;
+  color: color.$neutral-900;
+  font-size: 14px;
+  cursor: pointer;
+}

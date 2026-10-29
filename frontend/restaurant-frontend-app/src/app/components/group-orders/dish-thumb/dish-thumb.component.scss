@@ -1,0 +1,22 @@
+@use 'app/shared/styles/abstracts/colors' as color;
+
+:host {
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.thumb {
+  display: block;
+  border-radius: 50%;
+  object-fit: cover;
+  box-shadow: 0 2px 8px color.$shadow;
+}
+
+.thumb--letter {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: color.$green-100;
+  color: color.$green-600;
+  font-weight: 500;
+}
