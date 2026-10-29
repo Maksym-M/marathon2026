@@ -144,7 +144,6 @@ export class ReportingDashboardComponent implements OnInit {
   onReportTypeSelected(option: string) {
     this.selectedReportType = option;
     this.reportData = [];
-    console.log('Report type selected:', option);
   }
 
   onDatesUpdated(event: unknown): void {
@@ -178,7 +177,6 @@ export class ReportingDashboardComponent implements OnInit {
     this.selectedLocationId = selected?.id;
     this.reportData = [];
     this.selectedLocationAddress = selected?.address;
-    console.log('Selected locationId:', this.selectedLocationId);
   }
 
   get locationAddresses(): string[] {
@@ -267,8 +265,6 @@ export class ReportingDashboardComponent implements OnInit {
         this.cdr.detectChanges();
       });
     }
-    console.log('Selected start date:', this.selected?.startDate?.format('YYYY-MM-DD'));
-    console.log('Selected end date:', this.selected?.endDate?.format('YYYY-MM-DD'));
 
     this.cdr.detectChanges();
   }

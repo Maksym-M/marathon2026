@@ -50,7 +50,6 @@ export class EditReservationComponent {
   }
 
   submit() {
-    console.log('mock submit');
     // Here you would typically handle the form submission,
     this.backdropClick.emit();
   }

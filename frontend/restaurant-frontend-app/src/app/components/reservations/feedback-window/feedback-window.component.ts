@@ -70,10 +70,6 @@ export class FeedbackWindowComponent implements OnInit, AfterViewInit {
   // ) {}
 
   ngOnInit(): void {
-    // console.log('reservation:') ;
-    // console.log(this.selectedReservation);
-    console.log(this.feedbackForUpdate);
-
     const isAnon =
       this.selectedReservation?.customerId === null || this.selectedReservation?.customerId === '';
     this.isAnonymous = isAnon;
@@ -82,13 +78,9 @@ export class FeedbackWindowComponent implements OnInit, AfterViewInit {
       if (this.feedbackForUpdate.service) {
         this.serviceRating = this.feedbackForUpdate.service.rating;
 
+        // A signed-in user keeps the form to update the feedback; an anonymous one can't change it.
         if (isAnon) {
           this.showServiceForm = false;
-          console.log('Service feedback already exists for anonymous → hiding service form');
-        } else {
-          console.log(
-            'Service feedback exists for logged-in user → keeping form visible for updates'
-          );
         }
       }
 
@@ -97,11 +89,6 @@ export class FeedbackWindowComponent implements OnInit, AfterViewInit {
 
         if (isAnon) {
           this.showCuisineForm = false;
-          console.log('Cuisine feedback already exists for anonymous → hiding cuisine form');
-        } else {
-          console.log(
-            'Cuisine feedback exists for logged-in user → keeping form visible for updates'
-          );
         }
       }
 
@@ -200,7 +187,6 @@ export class FeedbackWindowComponent implements OnInit, AfterViewInit {
       next: () => {
         if (this.selectedReservation) {
           this.selectedReservation.status = ReservationStatus.Finished;
-          console.log(' this.selectedReservation.status ', this.selectedReservation.status);
         }
         this.feedbackUpdated.emit({
           reservationId: this.selectedReservation.id,

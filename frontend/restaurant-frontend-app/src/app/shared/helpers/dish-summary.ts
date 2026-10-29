@@ -1,5 +1,23 @@
 import { DishSummary, DishSummaryLine } from '@app/models/group-orders/dish-summary.model';
 import { Participant } from '@app/models/group-orders/participant.model';
+import { Order } from '@app/models/orders/order.model';
+
+/**
+ * The dishes of a group pre-order already sent to the restaurant, from its merged Order.
+ * The Order doesn't say who ordered what, so the lines have no shares.
+ */
+export function buildOrderDishSummary(order: Order): DishSummary {
+  const wholeTable: Participant = {
+    id: order.orderId,
+    type: 'Owner',
+    name: '',
+    isSubmitted: true,
+    total: 0,
+    items: order.orderItems.filter((item) => item.quantity > 0).map(({ dish, quantity }) => ({ dish, quantity })),
+  };
+  const summary = buildDishSummary([wholeTable]);
+  return { ...summary, lines: summary.lines.map((line) => ({ ...line, shares: [] })) };
+}
 
 /**
  * Every dish of the submitted pre-orders, once, with who ordered how many (US22).

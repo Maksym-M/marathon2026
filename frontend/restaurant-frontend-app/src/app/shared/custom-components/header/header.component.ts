@@ -4,7 +4,7 @@ import { Router, RouterLink, RouterLinkActive } from '@angular/router';
 import { UserModel } from '@app/auth/models/user.model';
 import { AuthenticationService } from '@app/auth/services/authentication.service';
 import { AsyncPipe, CommonModule } from '@angular/common';
-import { interval, Subscription, take } from 'rxjs';
+import { finalize, interval, Subscription, take } from 'rxjs';
 import { NotificationsService } from '@app/services/notifications/notifications.service';
 import { Notification } from '@app/models/notifications/notification.model';
 import { CartComponent } from '@app/components/cart/cart.component';
@@ -46,6 +46,8 @@ export class HeaderComponent implements OnInit, OnDestroy {
   showCart = signal(false);
   /** Reservation whose group cart the Cart opens; null — the regular cart. Decided when the Cart opens. */
   cartReservationId = signal<string | null>(null);
+  /** The Cart is finding the group reservation to open; more clicks don't start more requests. */
+  cartOpening = signal(false);
 
   private pollingSubscription?: Subscription;
   private userSubscription?: Subscription;
@@ -205,14 +207,21 @@ export class HeaderComponent implements OnInit, OnDestroy {
       this.showCart.set(false);
       return;
     }
+    if (this.cartOpening()) return;
     const fromPage = this.groupCartReservationId;
     if (fromPage) {
       this.openCart(fromPage);
       return;
     }
+    // Reuses the list the Reservations page (or an earlier Cart) just loaded, so the Cart opens at once.
+    this.cartOpening.set(true);
+    // Only upcoming reservations can have an open group, and the API builds fewer of them.
     this.reservationService
-      .getReservationsForUser$()
-      .pipe(take(1))
+      .getReservationsForUser$({ scope: 'upcoming' })
+      .pipe(
+        take(1),
+        finalize(() => this.cartOpening.set(false)),
+      )
       .subscribe({
         next: (reservations) => this.openCart(findNearestGroupReservationId(reservations)),
         error: () => this.openCart(null),

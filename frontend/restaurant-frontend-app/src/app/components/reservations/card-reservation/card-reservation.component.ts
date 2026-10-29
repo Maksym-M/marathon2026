@@ -150,6 +150,13 @@ export class CardReservationComponent {
   readonly statusView = computed<ReservationStatusView>(() => {
     const reservation = this.r();
 
+    // Until the visit starts, a group reservation shows where its pre-order is, as the Group Pre-Order page does.
+    if (reservation.status === ReservationStatusCustomer.Reserved) {
+      const groupStatus = this.groupPreOrder()?.status;
+      if (groupStatus === 'Submitted') return { class: 'sent', label: 'Sent to Restaurant' };
+      if (groupStatus === 'Open') return { class: 'collecting', label: 'Collecting pre-orders' };
+    }
+
     return (
       this.statusEnum()[reservation.status] ?? {
         class: '',

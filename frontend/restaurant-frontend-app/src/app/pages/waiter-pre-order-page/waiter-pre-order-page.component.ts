@@ -48,7 +48,6 @@ export class WaiterPreOrderPageComponent implements OnInit {
       const stored = sessionStorage.getItem('waiterPreOrderData');
       if (stored) {
         data = JSON.parse(stored);
-        console.log('data', data);
       }
     }
 
@@ -64,8 +63,6 @@ export class WaiterPreOrderPageComponent implements OnInit {
 
     firstValueFrom(this.preOrdersService.getByReservationId(data.reservationId))
       .then((order) => {
-        console.log('order', order);
-        console.log('ORDER FROM SERVER:', JSON.stringify(order, null, 2));
 
         this.orderItems = order.orderItems ?? [];
         this.reservationTime = order.reservationTime || '';
@@ -97,7 +94,6 @@ export class WaiterPreOrderPageComponent implements OnInit {
           this.orderItems.splice(index, 1, updatedItem);
           this.orderItems = [...this.orderItems];
           this.cdr.detectChanges();
-          console.log('Updated orderItems:', this.orderItems);
         }
       },
       error: (err) => {
@@ -123,8 +119,6 @@ export class WaiterPreOrderPageComponent implements OnInit {
           this.orderItems.splice(index, 1, updatedItem);
           this.orderItems = [...this.orderItems];
           this.cdr.detectChanges();
-          console.log('Dish rejected and updated locally:', updatedItem);
-          console.log('Updated orderItems:', this.orderItems);
         }
       },
       error: (err) => {

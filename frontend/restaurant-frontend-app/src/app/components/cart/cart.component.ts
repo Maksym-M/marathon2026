@@ -177,8 +177,7 @@ export class CartComponent implements OnInit {
       });
   }
 
-  addDishToOrder(orderId: string): void {
-    console.log(`Adding a dish to order ${orderId}`);
+  addDishToOrder(): void {
     void this.router.navigate(['/menu']);
   }
 

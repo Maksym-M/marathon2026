@@ -46,7 +46,6 @@ export class FeedbackQrModalComponent implements OnInit, OnDestroy {
           this.waiterName,
           this.isNewFeedback
         );
-        console.log('Feedback link:', this.feedbackUrl);
         this.qrCode = new QRCodeStyling({
           width: Math.min(window.innerWidth * 0.8, 300),
           height: Math.min(window.innerWidth * 0.8, 300),

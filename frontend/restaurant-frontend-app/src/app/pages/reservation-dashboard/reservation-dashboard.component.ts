@@ -15,7 +15,10 @@ import {
   finalize,
   forkJoin,
   map,
+  mergeMap,
+  Observable,
   of,
+  Subject,
   switchMap,
 } from 'rxjs';
 
@@ -24,7 +27,9 @@ import { CardReservationComponent } from '@app/components/reservations/card-rese
 import { FeedbackWindowComponent } from '@app/components/reservations/feedback-window/feedback-window.component';
 import { ReservationConfirmedComponent } from '@app/components/reservations/reservation-confirmed/reservation-confirmed.component';
 import { MakeReservationComponent } from '@app/components/tables/make-reservation/make-reservation.component';
+import { FeedbackReservationResponseItem } from '@app/models/feedbacks/feedback-reservation-response-item.model';
 import { FeedbackUpdatedEvent } from '@app/models/feedbacks/feedback.model';
+import { Order } from '@app/models/orders/order.model';
 import {
   Reservation,
   ReservationCustomer,
@@ -41,7 +46,7 @@ import { Roles } from '@app/shared/constants/roles';
 import { HeaderComponent } from '@app/shared/custom-components/header/header.component';
 import { ModalComponent } from '@app/shared/custom-components/modal/modal.component';
 import { DatePipe } from '@angular/common';
-import { splitReservationsByTab } from '@app/shared/helpers/reservation-tabs';
+import { isUpcomingReservation, splitReservationsByTab } from '@app/shared/helpers/reservation-tabs';
 import {
   formatTime,
   revertFormatDate,
@@ -53,6 +58,14 @@ interface ReservationStatusView {
 }
 
 type ReservationTab = 'upcoming' | 'past';
+
+/** Feedback requests in flight at once: the API's Lambda serves only a few requests in parallel. */
+const FEEDBACK_CONCURRENCY = 4;
+
+/** Feedback can be left only once the visit has started, the same rule the card uses for its button. */
+const canHaveFeedback = (reservation: ReservationCustomer): boolean =>
+  reservation.status === ReservationStatusCustomer.InProgress ||
+  reservation.status === ReservationStatusCustomer.Finished;
 
 @Component({
   selector: 'app-reservation-dashboard',
@@ -83,6 +96,9 @@ export class ReservationDashboardComponent implements OnInit {
   private readonly ordersService = inject(PreOrdersService);
   private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly feedbackQueue = new Subject<string>();
+  /** Loaded with Upcoming and reused for Past, which loads later. */
+  private preOrders: Order[] = [];
 
   readonly Roles = Roles;
 
@@ -93,10 +109,18 @@ export class ReservationDashboardComponent implements OnInit {
 
   readonly reservations = signal<ReservationCustomer[]>([]);
   readonly reservationsLoaded = signal(false);
+  /** Past & Cancelled isn't loaded with the page: `idle` until its tab opens. */
+  readonly pastState = signal<'idle' | 'loading' | 'ready' | 'error'>('idle');
 
   // US20 AC2–AC3, AC8: "Upcoming" (default) and "Past & Cancelled".
   readonly activeTab = signal<ReservationTab>('upcoming');
   readonly tabs = computed(() => splitReservationsByTab(this.reservations()));
+  /** The count is known only once Past & Cancelled has loaded. */
+  readonly pastTabLabel = computed(() =>
+    this.pastState() === 'ready'
+      ? `Past & Cancelled (${this.tabs().past.length})`
+      : 'Past & Cancelled',
+  );
   /** Cancelling can't be undone, so the card only asks; the dialog confirms. */
   readonly reservationToCancel = signal<ReservationCustomer | null>(null);
 
@@ -189,16 +213,27 @@ export class ReservationDashboardComponent implements OnInit {
     this.role.set(user.role);
     this.customerId.set(user.id);
 
+    this.startFeedbackQueue();
     this.loadReservations();
   }
 
+  /** Past & Cancelled loads the first time its tab opens (and again after a failed try). */
   selectTab(tab: ReservationTab): void {
     this.activeTab.set(tab);
+
+    const pastState = this.pastState();
+    if (tab === 'past' && (pastState === 'idle' || pastState === 'error')) {
+      this.loadPast();
+    }
   }
 
   switchTab(): void {
-    this.activeTab.update((tab) => (tab === 'upcoming' ? 'past' : 'upcoming'));
+    this.selectTab(this.activeTab() === 'upcoming' ? 'past' : 'upcoming');
     document.getElementById(`reservations-tab-${this.activeTab()}`)?.focus();
+  }
+
+  retryPast(): void {
+    this.loadPast();
   }
 
   askToCancel(id: string): void {
@@ -498,12 +533,18 @@ export class ReservationDashboardComponent implements OnInit {
       });
   }
 
+  /**
+   * Only the Upcoming tab loads at first (the API builds each reservation with several lookups); Past loads
+   * when its tab opens. Feedback is filled in afterwards, a few requests at a time.
+   */
   private loadReservations(): void {
     this.reservationsLoaded.set(false);
 
     forkJoin({
-      reservations:
-        this.reservationService.getReservationsForUser$(),
+      reservations: this.reservationService.getReservationsForUser$({
+        fresh: true,
+        scope: 'upcoming',
+      }),
       orders: this.ordersService.getPreOrders().pipe(
         catchError((error) => {
           console.error('Failed to load pre-orders:', error);
@@ -511,70 +552,28 @@ export class ReservationDashboardComponent implements OnInit {
         }),
       ),
     })
-      .pipe(
-        switchMap(({ reservations, orders }) => {
-          if (reservations.length === 0) {
-            return of<ReservationCustomer[]>([]);
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: ({ reservations, orders }) => {
+          this.preOrders = orders;
+          const loaded = reservations.map((reservation) =>
+            this.toCustomerReservation(reservation),
+          );
+          this.reservations.set(loaded);
+          this.queueFeedback(loaded);
+
+          // A backend without scopes returns every reservation: the Past tab is already here.
+          if (loaded.some((reservation) => !isUpcomingReservation(reservation))) {
+            this.pastState.set('ready');
           }
 
-          return forkJoin(
-            reservations.map((reservation) =>
-              this.reservationService
-                .getReservationFeedback(reservation.id)
-                .pipe(
-                  catchError((error: HttpErrorResponse) => {
-                    if (error.status !== 404) {
-                      console.error(
-                        `Failed to load feedback for reservation ${reservation.id}:`,
-                        error,
-                      );
-                    }
+          // Nothing upcoming: Past decides between the tabs and "No Reservations".
+          if (loaded.length === 0) {
+            this.loadPast();
+            return;
+          }
 
-                    return of(null);
-                  }),
-                  map(
-                    (
-                      feedback,
-                    ): ReservationCustomer => {
-                      const preOrder = orders.find(
-                        (order) =>
-                          order.reservationId ===
-                          reservation.id,
-                      );
-
-                      const hasFeedback =
-                        feedback?.service != null ||
-                        feedback?.cuisineExperience != null;
-
-                      return {
-                        ...reservation,
-                        status:
-                          reservation.status as unknown as ReservationStatusCustomer,
-                        restaurantName:
-                          reservation.restaurantName ?? '',
-                        feedback: hasFeedback
-                          ? feedback ?? undefined
-                          : undefined,
-                        preOrder,
-                        hasSubmittedPreOrder:
-                          preOrder != null &&
-                          (preOrder.status === 1 ||
-                            preOrder.status === 3),
-                      };
-                    },
-                  ),
-                ),
-            ),
-          );
-        }),
-        finalize(() => {
           this.reservationsLoaded.set(true);
-        }),
-        takeUntilDestroyed(this.destroyRef),
-      )
-      .subscribe({
-        next: (reservations) => {
-          this.reservations.set(reservations);
         },
         error: (error) => {
           console.error(
@@ -582,8 +581,110 @@ export class ReservationDashboardComponent implements OnInit {
             error,
           );
           this.reservations.set([]);
+          this.reservationsLoaded.set(true);
         },
       });
+  }
+
+  private loadPast(): void {
+    this.pastState.set('loading');
+
+    this.reservationService
+      .getReservationsForUser$({ fresh: true, scope: 'past' })
+      .pipe(
+        finalize(() => this.reservationsLoaded.set(true)),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe({
+        next: (reservations) => {
+          const past = reservations
+            .map((reservation) => this.toCustomerReservation(reservation))
+            .filter((reservation) => !isUpcomingReservation(reservation));
+          const pastIds = new Set(past.map((reservation) => reservation.id));
+
+          // The server's copy wins, e.g. over a reservation cancelled on this page a moment ago.
+          this.reservations.update((current) => [
+            ...current.filter((reservation) => !pastIds.has(reservation.id)),
+            ...past,
+          ]);
+          this.pastState.set('ready');
+          this.queueFeedback(past);
+        },
+        error: (error) => {
+          console.error('Failed to load past reservations:', error);
+          this.pastState.set('error');
+        },
+      });
+  }
+
+  private toCustomerReservation(reservation: Reservation): ReservationCustomer {
+    const preOrder = this.preOrders.find(
+      (order) => order.reservationId === reservation.id,
+    );
+
+    return {
+      ...reservation,
+      status: reservation.status as unknown as ReservationStatusCustomer,
+      restaurantName: reservation.restaurantName ?? '',
+      feedback: undefined,
+      preOrder,
+      hasSubmittedPreOrder:
+        preOrder != null && (preOrder.status === 1 || preOrder.status === 3),
+    };
+  }
+
+  private queueFeedback(reservations: ReservationCustomer[]): void {
+    reservations
+      .filter(canHaveFeedback)
+      .forEach((reservation) => this.feedbackQueue.next(reservation.id));
+  }
+
+  /** One queue for both tabs, so at most `FEEDBACK_CONCURRENCY` feedback requests run at any time. */
+  private startFeedbackQueue(): void {
+    this.feedbackQueue
+      .pipe(
+        mergeMap(
+          (reservationId) =>
+            this.loadFeedback$(reservationId).pipe(
+              map((feedback) => ({ reservationId, feedback })),
+            ),
+          FEEDBACK_CONCURRENCY,
+        ),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe(({ reservationId, feedback }) => {
+        if (!feedback) {
+          return;
+        }
+
+        this.reservations.update((reservations) =>
+          reservations.map((reservation) =>
+            reservation.id === reservationId ? { ...reservation, feedback } : reservation,
+          ),
+        );
+      });
+  }
+
+  /** null when there is no feedback yet (404) or it couldn't be loaded: the card then offers to leave one. */
+  private loadFeedback$(
+    reservationId: string,
+  ): Observable<FeedbackReservationResponseItem | null> {
+    return this.reservationService.getReservationFeedback(reservationId).pipe(
+      map((feedback) =>
+        feedback?.service != null || feedback?.cuisineExperience != null
+          ? feedback
+          : null,
+      ),
+      catchError((error: HttpErrorResponse) => {
+        if (error.status !== 404) {
+          console.error(
+            `Failed to load feedback for reservation ${reservationId}: ${error.status} ${error.message}`,
+          );
+        }
+
+        return of(null);
+      }),
+    );
   }
 
   private extractTableNumber(

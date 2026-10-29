@@ -2,6 +2,7 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { GroupInviteToken, GuestInvite } from '@app/models/reservations/guest-invite.model';
+import { SKIP_ERROR_TOAST } from '@app/auth/skip-error-toast.context';
 import { API_BASE_URL } from '@app/shared/config/api-base-url.token';
 import { GuestInviteService } from './guest-invite.service';
 
@@ -34,6 +35,18 @@ describe('GuestInviteService', () => {
     expect(req.request.method).toBe('GET');
     req.flush({ token: 'abc123xyz' });
     expect(result).toEqual({ token: 'abc123xyz' });
+  });
+
+  it('keeps the global error toast by default and skips it when silent', () => {
+    service.getInviteToken$('res-1').subscribe();
+    service.getInvite$('tok', { silent: true }).subscribe();
+
+    const tokenReq = httpMock.expectOne(`${BASE_URL}/reservations/res-1/invite-token`);
+    const inviteReq = httpMock.expectOne(`${BASE_URL}/guest/invites/tok`);
+    expect(tokenReq.request.context.get(SKIP_ERROR_TOAST)).toBeFalse();
+    expect(inviteReq.request.context.get(SKIP_ERROR_TOAST)).toBeTrue();
+    tokenReq.flush({ token: 'tok' });
+    inviteReq.flush({});
   });
 
   it('encodes the reservation id when requesting the invite token', () => {

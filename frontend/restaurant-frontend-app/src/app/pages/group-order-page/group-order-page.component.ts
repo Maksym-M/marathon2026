@@ -1,4 +1,4 @@
-import { CurrencyPipe, DatePipe } from '@angular/common';
+import { CurrencyPipe, DatePipe, NgTemplateOutlet } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { ChangeDetectionStrategy, Component, computed, DestroyRef, effect, inject, signal, untracked } from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
@@ -10,9 +10,11 @@ import { GroupOrderDialogsComponent } from '@app/components/group-orders/group-o
 import { ParticipantPanelComponent } from '@app/components/group-orders/participant-panel/participant-panel.component';
 import { DishQuantityChange } from '@app/models/group-orders/dish-quantity-change.model';
 import { Participant } from '@app/models/group-orders/participant.model';
+import { DishSummary } from '@app/models/group-orders/dish-summary.model';
 import { ReservationCustomer, ReservationStatusCustomer } from '@app/models/reservations/reservation.model';
 import { GroupOrdersService } from '@app/services/group-orders/group-orders.service';
-import { GroupOrderPageView } from './models';
+import { buildOrderDishSummary } from '@app/shared/helpers/dish-summary';
+import { GroupOrderDetails, GroupOrderPageView } from './models';
 
 /**
  * /reservations/:reservationId/group-order — the Owner's "Group Pre-Order" screen (US21–US23):
@@ -21,7 +23,15 @@ import { GroupOrderPageView } from './models';
  */
 @Component({
   selector: 'app-group-order-page',
-  imports: [CurrencyPipe, DatePipe, RouterLink, ParticipantPanelComponent, DishSummaryComponent, GroupOrderDialogsComponent],
+  imports: [
+    CurrencyPipe,
+    DatePipe,
+    NgTemplateOutlet,
+    RouterLink,
+    ParticipantPanelComponent,
+    DishSummaryComponent,
+    GroupOrderDialogsComponent,
+  ],
   templateUrl: './group-order-page.component.html',
   styleUrl: './group-order-page.component.scss',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -40,7 +50,7 @@ export class GroupOrderPageComponent {
   private readonly reservation = signal<ReservationCustomer | null>(null);
   private readonly reservationState = signal<'loading' | 'ready' | 'not-found' | 'error'>('loading');
 
-  /** Access and the reservation state are checked first (US21 AC9–AC10), then the group data. */
+  /** The reservation decides first (access and state, US21 AC9–AC10); the group data loads alongside it. */
   readonly view = computed<GroupOrderPageView>(() => {
     const reservationState = this.reservationState();
     if (reservationState !== 'ready') return reservationState;
@@ -53,12 +63,41 @@ export class GroupOrderPageComponent {
 
   readonly statusBadge = computed(() => (this.store.isOpen() ? 'Collecting pre-orders' : 'Sent to Restaurant'));
 
+  /** A group opened after Submit can't load its participants, so its dishes come from the merged Order. */
+  readonly submittedSummary = signal<DishSummary | null>(null);
+  readonly submittedOrderState = signal<'loading' | 'ready' | 'error'>('loading');
+
+  readonly details = computed<GroupOrderDetails | null>(() => {
+    const invite = this.store.invite();
+    if (invite) {
+      return {
+        restaurantName: invite.RestaurantName,
+        location: `${invite.LocationAddress}, Table ${invite.TableNumber}`,
+        startTime: invite.StartTime,
+        endTime: invite.EndTime,
+        guestCount: invite.MaxGuestCount,
+      };
+    }
+    const reservation = this.reservation();
+    if (!reservation) return null;
+    const table = reservation.tableName || (reservation.tableNumber != null ? `Table ${reservation.tableNumber}` : null);
+    return {
+      restaurantName: reservation.restaurantName,
+      location: table ? `${reservation.locationAddress}, ${table}` : reservation.locationAddress,
+      startTime: reservation.startTime,
+      endTime: reservation.endTime,
+      guestCount: reservation.guestCount,
+    };
+  });
+
   /** Progress (US23 AC3): every seat counts, the Owner included; the Owner counts once they have dishes. */
   readonly seats = computed(() => Math.max(this.store.invite()?.MaxGuestCount ?? 1, this.store.participants().length));
   readonly submittedCount = computed(() => (this.store.me()?.items.length ? 1 : 0) + this.store.submittedGuests());
   readonly progressPercent = computed(() => Math.round((this.submittedCount() / this.seats()) * 100));
-  /** One "Not joined" placeholder per seat nobody has taken (US23 AC1). */
-  readonly openSeatSlots = computed(() => Array.from({ length: this.store.openSeats() }, (_, index) => index));
+  /** One "Not joined" placeholder per seat nobody has taken (US23 AC1); none once the group is sent. */
+  readonly openSeatSlots = computed(() =>
+    this.store.isOpen() ? Array.from({ length: this.store.openSeats() }, (_, index) => index) : [],
+  );
 
   /** Back to the menu in pre-order mode for this reservation; the header Cart then opens the group cart. */
   readonly menuQueryParams = computed<Params>(() => {
@@ -74,13 +113,20 @@ export class GroupOrderPageComponent {
   constructor() {
     effect(() => {
       const reservationId = this.reservationId();
-      untracked(() => this.loadReservation(reservationId));
+      // In parallel: the group doesn't need the reservation, and the view still checks the reservation first.
+      untracked(() => {
+        this.loadReservation(reservationId);
+        this.store.load(reservationId);
+      });
+    });
+    effect(() => {
+      if (this.store.loadState() === 'submitted') untracked(() => this.loadSubmittedOrder());
     });
   }
 
   retry(): void {
     if (this.reservationState() !== 'ready') this.loadReservation(this.reservationId());
-    else this.store.reload();
+    if (this.store.loadState() === 'error') this.store.reload();
   }
 
   guestHeading(guest: Participant): string {
@@ -93,6 +139,20 @@ export class GroupOrderPageComponent {
     else this.store.updateQuantity(participant, item.dish.id, quantity);
   }
 
+  private loadSubmittedOrder(): void {
+    this.submittedOrderState.set('loading');
+    this.service
+      .getOrder$(this.reservationId())
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (order) => {
+          this.submittedSummary.set(buildOrderDishSummary(order));
+          this.submittedOrderState.set('ready');
+        },
+        error: () => this.submittedOrderState.set('error'),
+      });
+  }
+
   private loadReservation(reservationId: string): void {
     this.reservationState.set('loading');
     this.service
@@ -102,9 +162,6 @@ export class GroupOrderPageComponent {
         next: (reservation) => {
           this.reservation.set(reservation);
           this.reservationState.set('ready');
-          if (reservation.status === ReservationStatusCustomer.Reserved && reservation.guestCount >= 2) {
-            this.store.load(reservationId);
-          }
         },
         error: (error: unknown) => {
           const missing = error instanceof HttpErrorResponse && [400, 403, 404].includes(error.status);

@@ -3,7 +3,7 @@
 
   <div class="title-row">
     <h1 class="title">Group Pre-Order</h1>
-    @if (view() === 'ready') {
+    @if (view() === 'ready' || view() === 'submitted') {
       <span class="badge" [class.badge--sent]="!store.isOpen()">{{ statusBadge() }}</span>
     }
   </div>
@@ -33,6 +33,40 @@
     @case ('single') {
       <p class="state">Group pre-orders are available for reservations with 2 or more guests.</p>
     }
+    @case ('submitted') {
+      <div class="layout">
+        <div class="main-column">
+          <ng-container [ngTemplateOutlet]="detailsCard" />
+          <p class="meta">Your group pre-order has been sent to the restaurant. For any changes, please call us at this number:
+            <a href="tel:+1234456788990">+123 445 678 8990</a>.</p>
+        </div>
+
+        <aside class="side-column">
+          <section class="card total-card" aria-label="Grand Total">
+            <div class="total">
+              <span class="total-label">Grand Total</span>
+              <span class="total-value">{{ (submittedSummary()?.total ?? 0) | currency }}</span>
+            </div>
+            <p class="meta">Excludes taxes and service charges.</p>
+            <p class="sent" role="status">Sent to Restaurant</p>
+          </section>
+
+          <section class="card">
+            @switch (submittedOrderState()) {
+              @case ('loading') {
+                <p class="meta" role="status">Loading dishes…</p>
+              }
+              @case ('error') {
+                <p class="meta" role="alert">We couldn't load the dishes. Please refresh the page.</p>
+              }
+              @case ('ready') {
+                <app-dish-summary heading="Dish Summary" [summary]="submittedSummary()!" />
+              }
+            }
+          </section>
+        </aside>
+      </div>
+    }
     @case ('ready') {
       @if (store.isOpen() && store.isLocked()) {
         <p class="banner" role="status">Less than 30 minutes before the reservation time. No changes can be applied.</p>
@@ -40,37 +74,29 @@
 
       <div class="layout">
         <div class="main-column">
-          @if (store.invite(); as invite) {
-            <section class="card details" aria-label="Reservation">
-              <dl>
-                <dt>Restaurant</dt>
-                <dd>{{ invite.RestaurantName }}</dd>
-                <dt>Location</dt>
-                <dd>{{ invite.LocationAddress }}, Table {{ invite.TableNumber }}</dd>
-                <dt>Date</dt>
-                <dd>{{ invite.StartTime | date: 'MMM d, y' }}</dd>
-                <dt>Time</dt>
-                <dd>{{ invite.StartTime | date: 'HH:mm' }} - {{ invite.EndTime | date: 'HH:mm' }}</dd>
-                <dt>Guests</dt>
-                <dd>{{ invite.MaxGuestCount }} {{ invite.MaxGuestCount === 1 ? 'person' : 'people' }}</dd>
-              </dl>
-            </section>
+          <ng-container [ngTemplateOutlet]="detailsCard" />
+          @if (!store.isOpen()) {
+            <p class="meta">Your group pre-order has been sent to the restaurant. For any changes, please call us at this number:
+              <a href="tel:+1234456788990">+123 445 678 8990</a>.</p>
           }
 
           <section aria-labelledby="participants-title">
             <div class="section-head">
               <h2 id="participants-title" class="section-title">Participants</h2>
-              <span class="meta">{{ store.participants().length }} of {{ seats() }} joined</span>
+              @if (store.isOpen()) {
+                <span class="meta">{{ store.participants().length }} of {{ seats() }} joined</span>
+              }
             </div>
 
-            <div class="card progress-card">
-              <div class="progress-head">
-                <strong>{{ submittedCount() }} of {{ seats() }} submitted</strong>
-                <span class="sync">
-                  @if (store.updatedAt(); as updatedAt) {
-                    <span class="meta">Last updated: {{ updatedAt | date: 'HH:mm' }}</span>
-                  }
-                  @if (store.isOpen()) {
+            <!-- Progress and empty seats matter only while the group collects pre-orders. -->
+            @if (store.isOpen()) {
+              <div class="card progress-card">
+                <div class="progress-head">
+                  <strong>{{ submittedCount() }} of {{ seats() }} submitted</strong>
+                  <span class="sync">
+                    @if (store.updatedAt(); as updatedAt) {
+                      <span class="meta">Last updated: {{ updatedAt | date: 'HH:mm' }}</span>
+                    }
                     <button
                       type="button"
                       class="button button--secondary button--small"
@@ -79,25 +105,25 @@
                     >
                       {{ store.refreshState() === 'refreshing' ? 'Refreshing…' : 'Refresh' }}
                     </button>
+                  </span>
+                </div>
+                <div
+                  class="progress"
+                  role="progressbar"
+                  aria-label="Pre-orders submitted"
+                  aria-valuemin="0"
+                  [attr.aria-valuemax]="seats()"
+                  [attr.aria-valuenow]="submittedCount()"
+                >
+                  <span class="progress-fill" [style.width.%]="progressPercent()"></span>
+                </div>
+                <p class="sync-error" role="status">
+                  @if (store.refreshState() === 'failed') {
+                    Couldn't refresh. Please try again.
                   }
-                </span>
+                </p>
               </div>
-              <div
-                class="progress"
-                role="progressbar"
-                aria-label="Pre-orders submitted"
-                aria-valuemin="0"
-                [attr.aria-valuemax]="seats()"
-                [attr.aria-valuenow]="submittedCount()"
-              >
-                <span class="progress-fill" [style.width.%]="progressPercent()"></span>
-              </div>
-              <p class="sync-error" role="status">
-                @if (store.refreshState() === 'failed') {
-                  Couldn't refresh. Please try again.
-                }
-              </p>
-            </div>
+            }
 
             <ul class="participants">
               @if (store.me(); as me) {
@@ -182,5 +208,24 @@
     }
   }
 </main>
+
+<ng-template #detailsCard>
+  @if (details(); as card) {
+    <section class="card details" aria-label="Reservation">
+      <dl>
+        <dt>Restaurant</dt>
+        <dd>{{ card.restaurantName }}</dd>
+        <dt>Location</dt>
+        <dd>{{ card.location }}</dd>
+        <dt>Date</dt>
+        <dd>{{ card.startTime | date: 'MMM d, y' }}</dd>
+        <dt>Time</dt>
+        <dd>{{ card.startTime | date: 'HH:mm' }} - {{ card.endTime | date: 'HH:mm' }}</dd>
+        <dt>Guests</dt>
+        <dd>{{ card.guestCount }} {{ card.guestCount === 1 ? 'person' : 'people' }}</dd>
+      </dl>
+    </section>
+  }
+</ng-template>
 
 <app-group-order-dialogs />

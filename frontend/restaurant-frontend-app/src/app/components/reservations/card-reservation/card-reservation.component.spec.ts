@@ -129,6 +129,43 @@ describe('CardReservationComponent', () => {
       expect(button(element, 'View Details')).toBeDefined();
     });
 
+    describe('status badge', () => {
+      const badge = (element: HTMLElement) => text(element.querySelector('.status-badge') as HTMLElement);
+
+      // The Reservations page passes its labels in.
+      beforeEach(() =>
+        fixture.componentRef.setInput('statusEnum', {
+          [ReservationStatusCustomer.Reserved]: { class: 'reserved', label: 'Reserved' },
+          [ReservationStatusCustomer.InProgress]: { class: 'in-progress', label: 'In Progress' },
+        }),
+      );
+
+      it('group pre-order sent to the restaurant — "Sent to Restaurant" instead of "Reserved"', () => {
+        const element = render({ guestCount: 4, groupPreOrder: { ...OPEN, status: 'Submitted' } });
+        expect(badge(element)).toBe('Sent to Restaurant');
+        expect(element.querySelector('.status-badge')?.classList).toContain('sent');
+      });
+
+      it('group still collecting pre-orders — "Collecting pre-orders"', () => {
+        const element = render({ guestCount: 4, groupPreOrder: OPEN });
+        expect(badge(element)).toBe('Collecting pre-orders');
+        expect(element.querySelector('.status-badge')?.classList).toContain('collecting');
+      });
+
+      it('1 guest — still "Reserved"', () => {
+        expect(badge(render({ guestCount: 1, groupPreOrder: null }))).toBe('Reserved');
+      });
+
+      it('the visit has started — "In Progress", even with a sent group pre-order', () => {
+        const element = render({
+          guestCount: 4,
+          status: ReservationStatusCustomer.InProgress,
+          groupPreOrder: { ...OPEN, status: 'Submitted' },
+        });
+        expect(badge(element)).toBe('In Progress');
+      });
+    });
+
     it('AC5: after the 30-minute cut-off — no Add Pre-Order and no Invite Guests', () => {
       const soon = new Date(Date.now() + 10 * 60 * 1000);
       const element = render({ guestCount: 4, groupPreOrder: OPEN, startTime: soon, endTime: soon });

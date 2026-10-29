@@ -471,6 +471,10 @@ Response: `201 Created`
 ```
 
 ### `GET` /reservations
+Query (Customer only, optional): `scope=upcoming` — Reserved and In Progress; `scope=past` — Completed and Cancelled.
+Without `scope` — all reservations. Any other value — `400`. Waiters always get their whole list.
+Each reservation costs several lookups, so the "Reservations" page asks for `upcoming` first and `past` only when that tab opens.
+
 Response: `200 OK`
 ```json
 [
