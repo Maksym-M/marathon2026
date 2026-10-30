@@ -38,4 +38,35 @@ describe('DishCardComponent', () => {
   it('should create', () => {
     expect(component).toBeTruthy();
   });
+
+  it('should mark a dish as out of stock when GET /dishes sends the label', () => {
+    fixture.componentRef.setInput('dish', { ...dish, state: 'Out of stock' });
+    fixture.componentRef.setInput('preOrderEnabled', true);
+    fixture.detectChanges();
+
+    const element: HTMLElement = fixture.nativeElement;
+    expect(component.isUnavailable()).toBe(true);
+    expect(element.querySelector('.status-badge')?.textContent?.trim()).toBe('Out Of Stock');
+    expect(element.querySelector('.dish-card')?.classList).toContain('unavailable');
+  });
+
+  it('should mark a dish as unavailable when the guest menu sends the enum key', () => {
+    fixture.componentRef.setInput('dish', { ...dish, state: DishState.OutOfStock });
+    fixture.detectChanges();
+
+    expect(component.isUnavailable()).toBe(true);
+  });
+
+  it('should mark an on-stop dish as unavailable', () => {
+    fixture.componentRef.setInput('dish', { ...dish, state: 'On stop' });
+    fixture.detectChanges();
+
+    expect(component.isUnavailable()).toBe(true);
+    expect(component.dishStateLabel()).toBe('On Stop');
+  });
+
+  it('should keep an available dish selectable', () => {
+    expect(component.isUnavailable()).toBe(false);
+    expect(fixture.nativeElement.querySelector('.status-badge')).toBeNull();
+  });
 });
