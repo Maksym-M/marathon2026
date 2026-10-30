@@ -126,6 +126,17 @@ public class ReservationService : IReservationService
         return true;
     }
 
+    public async Task<Reservation> CompleteIfEndedAsync(Reservation reservation)
+    {
+        if (!ReservationLifecycleHelper.ShouldAutoComplete(reservation, DateTime.UtcNow))
+            return reservation;
+
+        reservation.Status = ReservationStatus.Completed;
+        // A failed save is logged by UpdateReservationAsync; the next read tries again, and this answer is already right.
+        await UpdateReservationAsync(reservation);
+        return reservation;
+    }
+
     public async Task<ReservationResponse> UpdateReservationTableAsync(string callerId, string reservationId, string newTableId, ILambdaLogger logger)
     {
         var reservation = await LoadReservationAsync(reservationId)

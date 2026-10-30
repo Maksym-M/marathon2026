@@ -10,6 +10,7 @@ using APIHandler.Repositories.Tables;
 using APIHandler.Services.GuestSessions;
 using APIHandler.Services.Locations;
 using APIHandler.Services.Orders;
+using APIHandler.Services.Reservations;
 using Moq;
 using System.Text.Json;
 
@@ -25,6 +26,7 @@ public class GetReservationsForUserHandlerTests
     private readonly Mock<IGroupReservationRepository> _groupReservationRepository = new();
     private readonly Mock<IGuestSessionService> _guestSessionService = new();
     private readonly Mock<ITableRepository> _tableRepository = new();
+    private readonly Mock<IReservationService> _reservationService = new();
     private readonly Mock<ILambdaContext> _context = new();
     private readonly GetReservationsForUserHandler _handler;
 
@@ -46,13 +48,23 @@ public class GetReservationsForUserHandlerTests
         _reservationRepository
             .Setup(r => r.GetReservationByIdAsync(It.IsAny<string>()))
             .ReturnsAsync((string id) => _reservations.Single(reservation => reservation.Id == id));
+        // Like the real service: a reservation that ended unstarted comes back Completed.
+        _reservationService
+            .Setup(s => s.CompleteIfEndedAsync(It.IsAny<Reservation>()))
+            .ReturnsAsync((Reservation reservation) =>
+            {
+                if (ReservationLifecycleHelper.ShouldAutoComplete(reservation, DateTime.UtcNow))
+                    reservation.Status = ReservationStatus.Completed;
+                return reservation;
+            });
         _handler = new GetReservationsForUserHandler(
             _reservationRepository.Object,
             _locationService.Object,
             _orderService.Object,
             _groupReservationRepository.Object,
             _guestSessionService.Object,
-            _tableRepository.Object);
+            _tableRepository.Object,
+            _reservationService.Object);
     }
 
     [Theory]
@@ -92,6 +104,33 @@ public class GetReservationsForUserHandlerTests
     }
 
     [Fact]
+    public async Task HandleRequest_ReservedButAlreadyEnded_IsCompletedAndListedInPast()
+    {
+        _reservations.Add(Reservation("ended", ReservationStatus.Reserved, endTime: DateTime.UtcNow.AddMinutes(-1)));
+
+        var upcoming = await _handler.HandleRequest(Request("[Customer]", "upcoming"), _context.Object);
+        var past = await _handler.HandleRequest(Request("[Customer]", "past"), _context.Object);
+
+        Assert.DoesNotContain("ended", Ids(upcoming));
+        Assert.Contains("ended", Ids(past));
+        Assert.Equal((int)ReservationStatus.Completed, Status(past, "ended"));
+    }
+
+    [Fact]
+    public async Task HandleRequest_Waiter_SeesEndedUnstartedReservationsCompleted()
+    {
+        // The waiter branch logs the table and index names, which the Lambda gets from its environment.
+        Environment.SetEnvironmentVariable("reservationsTable", "Reservations");
+        Environment.SetEnvironmentVariable("reservationsWaiterIdGlobalIndex", "GSI_WaiterId");
+        var ended = Reservation("ended", ReservationStatus.Reserved, endTime: DateTime.UtcNow.AddMinutes(-1));
+        _reservationRepository.Setup(r => r.GetReservationsByWaiterIdAsync(CustomerId)).ReturnsAsync([ended]);
+
+        var response = await _handler.HandleRequest(Request("[Waiter]", null), _context.Object);
+
+        Assert.Equal((int)ReservationStatus.Completed, Status(response, "ended"));
+    }
+
+    [Fact]
     public async Task HandleRequest_UnknownScope_Returns400()
     {
         var response = await _handler.HandleRequest(Request("[Customer]", "everything"), _context.Object);
@@ -116,17 +155,26 @@ public class GetReservationsForUserHandlerTests
         Assert.Equal(included, scope.Includes(status));
     }
 
-    private static Reservation Reservation(string id, ReservationStatus status) => new()
+    private static Reservation Reservation(string id, ReservationStatus status, DateTime? endTime = null)
     {
-        Id = id,
-        TableId = "table-1",
-        CustomerId = CustomerId,
-        WaiterId = "waiter-1",
-        GuestCount = 1,
-        StartTime = new DateTime(2030, 10, 17, 12, 0, 0, DateTimeKind.Utc),
-        EndTime = new DateTime(2030, 10, 17, 13, 30, 0, DateTimeKind.Utc),
-        Status = status,
-    };
+        var end = endTime ?? new DateTime(2030, 10, 17, 13, 30, 0, DateTimeKind.Utc);
+        return new Reservation
+        {
+            Id = id,
+            TableId = "table-1",
+            CustomerId = CustomerId,
+            WaiterId = "waiter-1",
+            GuestCount = 1,
+            StartTime = end.AddMinutes(-90),
+            EndTime = end,
+            Status = status,
+        };
+    }
+
+    private static int Status(APIGatewayProxyResponse response, string id) =>
+        JsonDocument.Parse(response.Body).RootElement.EnumerateArray()
+            .Single(item => item.GetProperty("id").GetString() == id)
+            .GetProperty("status").GetInt32();
 
     private static APIGatewayProxyRequest Request(string groups, string? scope) => new()
     {

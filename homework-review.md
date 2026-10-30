@@ -8,6 +8,7 @@ A short guide for the reviewer: where everything is, what was done for the homew
 - **Designs:** `homework-designs/` (PNG export), source in [Figma](https://www.figma.com/design/D0gF2U2c7BunGhHx8QbLtp/Cart--homework-?node-id=0-1&t=Vl7EtObzT3Bz5ggY-1)
 - **Live app (frontend + deployed backend):** https://d12ohokkkl4x8r.cloudfront.net/reservations
 - **Code:** `backend/restaurant-backend-app` and `frontend/restaurant-frontend-app` in this repo
+- **Manual QA:** `homework-qa/` (US11 requirements analysis, test cases, bug reports)
 - **Local demo without a backend:** `npm start` in `frontend/restaurant-frontend-app`, then open `http://localhost:4200/reservations?demo` or `http://localhost:4200/reservations/demo-reservation/group-order?demo`
 
 ## Backend homework: all 3 levels done ✅
@@ -31,6 +32,34 @@ Only the Owner can call these endpoints. All of them have xUnit tests and are do
 | Bonus | Remove Guest with confirmation dialog | ✅ Done |
 
 **Note:** the UI follows our own designs in `homework-designs/`, not the original page mockup. The Owner works in a cart panel over the menu (tabs: Cart, Participants, Dish Summary), and there is also a "Group Pre-Order" page. Because the component structure changed, the tests in `frontend/restaurant-frontend-app/homework-tests/` were rewritten to match. They keep the same levels and the same key checks, for example that Grand Total counts only submitted carts. Run them with `npm run test:hw`.
+
+## Manual QA homework: US11 done ✅
+
+The story under test is US11 "Guest Reservation and Menu View": a Guest opens the menu after joining through the invite link. The build was given as one screenshot of the guest Menu page (`requarements/image (4).png`), checked against the design `requarements/Guest Flow.png`.
+
+| Deliverable | File | What's inside | Status |
+|---|---|---|---|
+| Requirements analysis | `US11_Requirements_Analysis.md` (also `.docx`) | 30 gaps in the story (G1–G30), each with a question to the BA/PO; 7 inconsistencies in the design (D1–D7); 7 proposed extra ACs | ✅ Done |
+| Test cases | `US11_Test_Cases.xlsx` | 17 test cases covering all 5 ACs, plus Sort by, the Dish details modal and the font from the design | ✅ Done |
+| Bug reports | `US11_Bug_Reports.xlsx` | 9 bugs in the given template, each with a screenshot | ✅ Done |
+
+**Test run:** 1 Passed, 6 Failed, 10 Not Run. The Not Run cases need clicks, a second Guest or admin access (adding to the cart, switching tabs, sorting, refreshing after an "On Stop" change), which a static screenshot can't show. They are written in full so they can be run on a live build.
+
+**Bugs found:**
+
+| # | Bug | Priority / Severity |
+|---|---|---|
+| 1 | Every dish card shows the same salad image | High / Major |
+| 2 | The header shows "Main page", "Book a Table", "Reservations" and the profile icon to an unregistered Guest | Medium / Major |
+| 3 | The reservation info strip has no date | Medium / Minor |
+| 4 | Category tabs: an extra "All dishes" tab, and no "Desserts" tab | Medium / Minor |
+| 5 | "Sort by" defaults to "Recommended" instead of "Popular First" | Low / Minor |
+| 6 | The cart icon is in the info strip instead of the header | Low / Minor |
+| 7 | Unavailable dishes are labelled "Out Of Stock" instead of "Sold Out" | Low / Trivial |
+| 8 | Serving size format is inconsistent ("200g" vs "450 g") | Low / Trivial |
+| 9 | The heading background image differs from the design | Low / Trivial |
+
+**Note:** where the story is silent, expected results follow the design. Where the story and the design disagree (for example "On Stop" in the AC, "Sold Out" in the design), the conflict is raised as a question in the requirements analysis.
 
 ## Beyond the homework
 

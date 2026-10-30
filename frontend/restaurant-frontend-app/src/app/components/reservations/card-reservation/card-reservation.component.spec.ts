@@ -189,6 +189,21 @@ describe('CardReservationComponent', () => {
       expect(button(element, 'Invite Guests')).toBeUndefined();
     });
 
+    it('Sent to Restaurant: no counter and no progress bar — the badge says it', () => {
+      const element = render({ guestCount: 4, groupPreOrder: { ...OPEN, status: 'Submitted' } });
+      expect(text(element)).not.toContain('Pre-orders:');
+      expect(element.querySelector('[role="progressbar"]')).toBeNull();
+    });
+
+    it('Completed after being sent: the counter is back (AC7)', () => {
+      const element = render({
+        guestCount: 4,
+        groupPreOrder: { ...OPEN, status: 'Submitted' },
+        status: ReservationStatusCustomer.Finished,
+      });
+      expect(text(element)).toContain('Pre-orders: 2/4');
+    });
+
     it('Cancelled: no counter and no progress bar', () => {
       const element = render({
         guestCount: 4,

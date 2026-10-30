@@ -15,6 +15,7 @@ using APIHandler.Services.GroupReservations;
 using APIHandler.Services.GuestSessions;
 using APIHandler.Services.Locations;
 using APIHandler.Services.Orders;
+using APIHandler.Services.Reservations;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -33,6 +34,7 @@ public class GetReservationsForUserHandler : IApiRequestHandler
     private readonly IGroupReservationRepository _groupReservationRepository;
     private readonly IGuestSessionService _guestSessionService;
     private readonly ITableRepository _tableRepository;
+    private readonly IReservationService _reservationService;
 
     public GetReservationsForUserHandler(
         IReservationRepository reservationRepository,
@@ -40,8 +42,10 @@ public class GetReservationsForUserHandler : IApiRequestHandler
         IOrderService orderService,
         IGroupReservationRepository groupReservationRepository,
         IGuestSessionService guestSessionService,
-        ITableRepository tableRepository)
+        ITableRepository tableRepository,
+        IReservationService reservationService)
     {
+        _reservationService = reservationService ?? throw new ArgumentNullException(nameof(reservationService));
         _guestSessionService = guestSessionService ?? throw new ArgumentNullException(nameof(guestSessionService));
         _tableRepository = tableRepository ?? throw new ArgumentNullException(nameof(tableRepository));
         _reservationRepository = reservationRepository ?? throw new ArgumentNullException(nameof(reservationRepository));
@@ -97,7 +101,8 @@ public class GetReservationsForUserHandler : IApiRequestHandler
         {
             try
             {
-                var response = await ConvertToResponse(reservation);
+                var current = await _reservationService.CompleteIfEndedAsync(reservation);
+                var response = await ConvertToResponse(current);
                 result.Add(response);
             }
             catch (Exception ex)
@@ -121,12 +126,16 @@ public class GetReservationsForUserHandler : IApiRequestHandler
             var reservations = await _reservationRepository.GetReservationsByCustomerIdAsync(userId);
             var result = new List<ReservationResponse>();
 
+            // Filtered by the status after auto-completion, so a reservation that ended unstarted lands in Past at once.
             // The index can lag a moment behind the table, so the status is checked again on the full item.
-            foreach (var reservation in reservations.Where(reservation => scope.Includes(reservation.Status)))
+            var now = DateTime.UtcNow;
+            foreach (var reservation in reservations.Where(reservation =>
+                         scope.Includes(ReservationLifecycleHelper.EffectiveStatus(reservation, now))))
             {
                 try
                 {
                     var fullReservation = await _reservationRepository.GetReservationByIdAsync(reservation.Id) ?? reservation;
+                    fullReservation = await _reservationService.CompleteIfEndedAsync(fullReservation);
                     if (!scope.Includes(fullReservation.Status))
                         continue;
 
