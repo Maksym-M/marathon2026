@@ -36,13 +36,37 @@ public class GuestSessionRepository(IDynamoDBContext context) : IGuestSessionRep
         return result.FirstOrDefault();
     }
 
+    /// <summary>
+    /// Every session of the group as it is now. The groupReservationId index is only eventually consistent: right after
+    /// a change it can still list a session that was just deleted, or a session as it was before it was submitted or
+    /// edited — which let a removed guest reappear in the Owner's list and be merged into a submitted pre-order. So the
+    /// index only says which sessions belong to the group; the sessions themselves are read from the table with a
+    /// strongly consistent read, and one deleted in the meantime drops out.
+    /// </summary>
     public async Task<List<GuestSession>> GetAllByGroupReservationIdAsync(string groupReservationId)
     {
-        return await context.QueryAsync<GuestSession>(groupReservationId, new QueryConfig
+        List<GuestSession> indexed = await context.QueryAsync<GuestSession>(groupReservationId, new QueryConfig
         {
             OverrideTableName = ResourceNames.GuestSessionTableName,
             IndexName = GlobalSecondaryIndexes.GuestSession.GroupReservationId
         }).GetRemainingAsync();
+
+        if (indexed.Count == 0)
+            return indexed;
+
+        var batchGet = context.CreateBatchGet<GuestSession>(new BatchGetConfig
+        {
+            ConsistentRead = true,
+            OverrideTableName = ResourceNames.GuestSessionTableName
+        });
+
+        foreach (var session in indexed)
+            batchGet.AddKey(session.Id);
+
+        await batchGet.ExecuteAsync();
+
+        var current = batchGet.Results.ToDictionary(s => s.Id);
+        return indexed.Where(s => current.ContainsKey(s.Id)).Select(s => current[s.Id]).ToList();
     }
 
     public async Task SaveAsync(GuestSession guestSession) => await context.SaveAsync(guestSession, new SaveConfig

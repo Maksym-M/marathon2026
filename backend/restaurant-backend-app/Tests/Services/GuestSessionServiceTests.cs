@@ -878,6 +878,31 @@ public class GuestSessionServiceTests
 
     [Theory]
     [AutoData]
+    public async Task DeleteGuestSessionAsync_ReadStillReturnsRemovedSession_SnapshotLeavesItOut(
+        GroupReservation groupReservation,
+        Reservation reservation,
+        string userId)
+    {
+        SetupOwnedGroup(groupReservation, reservation, userId);
+        var removed = CreateSession("s1", groupReservation.GroupReservationId, "Andrii", isSubmitted: true);
+        var remaining = CreateSession("s2", groupReservation.GroupReservationId, "Olena", isSubmitted: false);
+
+        _mockGuestSessionRepository.Setup(r => r.GetByGuestSessionId(removed.Id)).ReturnsAsync(removed);
+        _mockGuestSessionRepository
+            .Setup(r => r.GetAllByGroupReservationIdAsync(groupReservation.GroupReservationId))
+            .ReturnsAsync([removed, remaining]);
+        _mockDishRepository
+            .Setup(r => r.GetDishesByIdsAsync(It.IsAny<IEnumerable<string>>()))
+            .ReturnsAsync([]);
+
+        GetAllSessionsResponse result = await _guestSessionService.DeleteGuestSessionAsync(userId, groupReservation.GroupReservationId, removed.Id);
+
+        Assert.DoesNotContain(result.Participants, p => p.Id == removed.Id);
+        Assert.Equal(remaining.Id, result.Participants.Last().Id);
+    }
+
+    [Theory]
+    [AutoData]
     public async Task DeleteGuestSessionAsync_SessionNotFound_ThrowsGuestSessionNotFoundException(
         GroupReservation groupReservation,
         Reservation reservation,
