@@ -21,19 +21,24 @@ export class DishCardComponent {
   readonly dishClicked = output<void>();
   readonly preOrderClicked = output<void>();
 
-  readonly dishStateLabel = computed(() => {
+  // GET /dishes sends a label ("Out of stock"), the guest menu sends the enum key ("OutOfStock").
+  private readonly dishState = computed(() => {
     const state = this.dish().state;
+    const key = state.replace(/\s+/g, '').toLowerCase();
+
+    return Object.values(DishState).find((s) => s.toLowerCase() === key) ?? state;
+  });
+
+  readonly dishStateLabel = computed(() => {
+    const state = this.dishState();
 
     return DishStateLabels[state as DishState] ?? state;
   });
 
   readonly isUnavailable = computed(() => {
-    const state = this.dish().state.toLowerCase();
+    const state = this.dishState();
 
-    return (
-      state === DishState.OnStop.toLowerCase() ||
-      state === DishState.OutOfStock.toLowerCase()
-    );
+    return state === DishState.OnStop || state === DishState.OutOfStock;
   });
 
   onCardClicked(): void {

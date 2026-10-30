@@ -22,6 +22,22 @@ public sealed class ApiResponseContext
         ErrorMessage = response.Ok ? "" : await response.ReadErrorMessageAsync();
     }
 
+    /// <summary>Captures a set-up call the scenario cannot do without, and fails right there — naming what was being
+    /// set up, with the status and body — when it did not succeed.</summary>
+    public async Task<T> CaptureRequiredAsync<T>(IAPIResponse response, string settingUp)
+    {
+        await CaptureRequiredAsync(response, settingUp);
+        return Json<T>();
+    }
+
+    /// <inheritdoc cref="CaptureRequiredAsync{T}"/>
+    public async Task CaptureRequiredAsync(IAPIResponse response, string settingUp)
+    {
+        await CaptureAsync(response);
+        if (!Succeeded)
+            throw new InvalidOperationException($"{settingUp} failed with {Status}: {Body}");
+    }
+
     public bool Succeeded => (Response ?? throw new InvalidOperationException("No API call has been made in this scenario yet.")).Ok;
 
     public int Status => (Response ?? throw new InvalidOperationException("No API call has been made in this scenario yet.")).Status;

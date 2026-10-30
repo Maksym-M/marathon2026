@@ -205,7 +205,7 @@ public class GuestSessionService(
 
         await guestSessionRepository.DeleteAsync(session);
 
-        return await BuildGroupSnapshotAsync(group, reservation);
+        return await BuildGroupSnapshotAsync(group, reservation, removedSessionId: session.Id);
     }
 
     public async Task<GetAllSessionsResponse> UpdateSessionDishQuantityAsync(string userId, string groupReservationId, string guestSessionId, string dishId, int quantity)
@@ -468,9 +468,12 @@ public class GuestSessionService(
         return session;
     }
 
-    private async Task<GetAllSessionsResponse> BuildGroupSnapshotAsync(GroupReservation group, Reservation reservation)
+    /// <param name="removedSessionId">A session deleted just before: never listed, whatever the read still returns.</param>
+    private async Task<GetAllSessionsResponse> BuildGroupSnapshotAsync(GroupReservation group, Reservation reservation, string? removedSessionId = null)
     {
-        var sessions = await guestSessionRepository.GetAllByGroupReservationIdAsync(group.GroupReservationId);
+        var sessions = (await guestSessionRepository.GetAllByGroupReservationIdAsync(group.GroupReservationId))
+            .Where(s => s.Id != removedSessionId)
+            .ToList();
         var ownerDishes = GetOwnerDishes(group, await GetActiveOrderAsync(reservation.Id), sessions);
 
         var dishIds = sessions
