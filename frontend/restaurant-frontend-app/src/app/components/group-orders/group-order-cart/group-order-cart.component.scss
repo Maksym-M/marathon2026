@@ -86,6 +86,11 @@
   font-size: 16px;
 }
 
+.state-text {
+  margin: 0;
+  color: color.$neutral-600;
+}
+
 .tabs {
   display: flex;
   gap: 8px;

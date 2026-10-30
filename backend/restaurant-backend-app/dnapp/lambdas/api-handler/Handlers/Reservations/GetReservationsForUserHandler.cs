@@ -15,6 +15,7 @@ using APIHandler.Services.GroupReservations;
 using APIHandler.Services.GuestSessions;
 using APIHandler.Services.Locations;
 using APIHandler.Services.Orders;
+using APIHandler.Services.Reservations;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -33,6 +34,7 @@ public class GetReservationsForUserHandler : IApiRequestHandler
     private readonly IGroupReservationRepository _groupReservationRepository;
     private readonly IGuestSessionService _guestSessionService;
     private readonly ITableRepository _tableRepository;
+    private readonly IReservationService _reservationService;
 
     public GetReservationsForUserHandler(
         IReservationRepository reservationRepository,
@@ -40,8 +42,10 @@ public class GetReservationsForUserHandler : IApiRequestHandler
         IOrderService orderService,
         IGroupReservationRepository groupReservationRepository,
         IGuestSessionService guestSessionService,
-        ITableRepository tableRepository)
+        ITableRepository tableRepository,
+        IReservationService reservationService)
     {
+        _reservationService = reservationService ?? throw new ArgumentNullException(nameof(reservationService));
         _guestSessionService = guestSessionService ?? throw new ArgumentNullException(nameof(guestSessionService));
         _tableRepository = tableRepository ?? throw new ArgumentNullException(nameof(tableRepository));
         _reservationRepository = reservationRepository ?? throw new ArgumentNullException(nameof(reservationRepository));
@@ -71,7 +75,14 @@ public class GetReservationsForUserHandler : IApiRequestHandler
         }
         else if (groups.Contains(Roles.Customer.ToString()))
         {
-            return await GetReservationsForCustomerAsync(userId, context);
+            string? scopeValue = null;
+            request.QueryStringParameters?.TryGetValue(ReservationScopeHelper.QueryParameter, out scopeValue);
+            if (!ReservationScopeHelper.TryParse(scopeValue, out ReservationScope scope))
+            {
+                return ResponseBuilder.CreateErrorResponse(400, "Invalid 'scope': use 'upcoming' or 'past', or leave it out for all reservations.", context.Logger);
+            }
+
+            return await GetReservationsForCustomerAsync(userId, scope, context);
         }
         else
         {
@@ -90,7 +101,8 @@ public class GetReservationsForUserHandler : IApiRequestHandler
         {
             try
             {
-                var response = await ConvertToResponse(reservation);
+                var current = await _reservationService.CompleteIfEndedAsync(reservation);
+                var response = await ConvertToResponse(current);
                 result.Add(response);
             }
             catch (Exception ex)
@@ -103,18 +115,29 @@ public class GetReservationsForUserHandler : IApiRequestHandler
         return ResponseBuilder.CreateSuccessResponse(result);
     }
 
-    private async Task<APIGatewayProxyResponse> GetReservationsForCustomerAsync(string userId, ILambdaContext context)
+    /// <summary>
+    /// Building one reservation takes several lookups, so a <paramref name="scope"/> skips the others before them:
+    /// the "Reservations" page asks for "Upcoming" first and "Past" only when that tab opens.
+    /// </summary>
+    private async Task<APIGatewayProxyResponse> GetReservationsForCustomerAsync(string userId, ReservationScope scope, ILambdaContext context)
     {
         try
         {
             var reservations = await _reservationRepository.GetReservationsByCustomerIdAsync(userId);
             var result = new List<ReservationResponse>();
 
-            foreach (var reservation in reservations)
+            // Filtered by the status after auto-completion, so a reservation that ended unstarted lands in Past at once.
+            // The index can lag a moment behind the table, so the status is checked again on the full item.
+            var now = DateTime.UtcNow;
+            foreach (var reservation in reservations.Where(reservation =>
+                         scope.Includes(ReservationLifecycleHelper.EffectiveStatus(reservation, now))))
             {
                 try
                 {
                     var fullReservation = await _reservationRepository.GetReservationByIdAsync(reservation.Id) ?? reservation;
+                    fullReservation = await _reservationService.CompleteIfEndedAsync(fullReservation);
+                    if (!scope.Includes(fullReservation.Status))
+                        continue;
 
                     var response = await ConvertToResponse(fullReservation, includeGroupPreOrder: true);
                     result.Add(response);

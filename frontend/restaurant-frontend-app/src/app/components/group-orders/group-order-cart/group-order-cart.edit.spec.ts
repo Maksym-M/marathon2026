@@ -121,11 +121,12 @@ describe('Бонус · Owner змінює страви', () => {
     });
   });
 
-  it('після Submit — лише перегляд: «Qty: 1», без кнопок', () => {
+  it('після Submit — порожній кошик, без страв і кнопок редагування', () => {
     service.getStatus$.and.returnValue(of({ currentParticipants: 4, maxCapacity: 4, status: 'Submitted' as const }));
     const { element } = renderCart(service);
     expect(element.querySelector('app-quantity-stepper')).toBeNull();
     expect(element.querySelector('button.trash')).toBeNull();
-    expect(text(element.querySelector('.my-pre-order')!)).toContain('Qty: 1');
+    expect(element.querySelector('.my-pre-order')).toBeNull();
+    expect(text(element)).toContain('Your cart is empty');
   });
 });

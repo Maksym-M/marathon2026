@@ -6,6 +6,7 @@ import { of } from 'rxjs';
 import { GroupSessionsResponse } from '@app/models/group-orders/group-sessions-response.model';
 import { GroupStatusResponse } from '@app/models/group-orders/group-status.model';
 import { Participant } from '@app/models/group-orders/participant.model';
+import { Order } from '@app/models/orders/order.model';
 import { GuestInvite } from '@app/models/reservations/guest-invite.model';
 import { ReservationCustomer, ReservationStatusCustomer } from '@app/models/reservations/reservation.model';
 import { GroupOrdersService } from '@app/services/group-orders/group-orders.service';
@@ -62,6 +63,21 @@ export const RESERVATION = {
   waiterId: 'waiter-1',
 } satisfies ReservationCustomer;
 
+/** The merged Order after Submit (GET /orders/{reservationId}): every submitted dish, no owners. */
+export const SUBMITTED_ORDER = {
+  orderId: 'order-1',
+  reservationId: 'res-1',
+  reservationAddress: '48 Rustaveli Avenue',
+  reservationTime: '12:00',
+  status: 1,
+  orderItems: [
+    { dish: BERRY, quantity: 2, state: 0 },
+    { dish: STRAWBERRY, quantity: 2, state: 0 },
+    { dish: POTATO, quantity: 2, state: 0 },
+    { dish: SPRING, quantity: 1, state: 0 },
+  ],
+} as unknown as Order;
+
 export const OPEN: GroupStatusResponse = { currentParticipants: 4, maxCapacity: 4, status: 'Open' };
 
 export function sessions(participants: Participant[]): GroupSessionsResponse {
@@ -70,9 +86,10 @@ export function sessions(participants: Participant[]): GroupSessionsResponse {
 
 export function createServiceSpy(): jasmine.SpyObj<GroupOrdersService> {
   const service = jasmine.createSpyObj<GroupOrdersService>('GroupOrdersService', [
-    'getGroupInvite$', 'getReservation$', 'getSessions$', 'getOwnerSessionId$', 'getStatus$', 'submit$', 'removeSession$', 'removeSeat$', 'updateDishQuantity$',
+    'getGroupInvite$', 'getReservation$', 'getOrder$', 'getSessions$', 'getOwnerSessionId$', 'getStatus$', 'submit$', 'removeSession$', 'removeSeat$', 'updateDishQuantity$',
   ]);
   service.getGroupInvite$.and.returnValue(of({ token: 'tok', invite: INVITE }));
+  service.getOrder$.and.returnValue(of(structuredClone(SUBMITTED_ORDER)));
   service.getReservation$.and.returnValue(of(RESERVATION));
   service.getSessions$.and.callFake(() => of(structuredClone(SESSIONS)));
   service.getOwnerSessionId$.and.returnValue(of('owner'));

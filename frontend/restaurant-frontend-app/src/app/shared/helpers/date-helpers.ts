@@ -33,7 +33,6 @@ export function revertFormatTime(timeStr: string, dateStr: string): string {
   date.setDate(new Date(dateStr).getDate());
   date.setHours(hour, minute, 0, 0);
 
-  console.log('Reverted time:', date.toISOString(), date);
   return date.toISOString();
 }
 

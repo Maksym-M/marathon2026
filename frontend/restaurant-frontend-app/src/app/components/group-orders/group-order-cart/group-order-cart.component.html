@@ -21,9 +21,18 @@
       }
     </header>
 
-    @switch (store.loadState()) {
+    @switch (view()) {
       @case ('loading') {
         <p class="state" role="status">Loading pre-orders…</p>
+      }
+      @case ('submitted') {
+        <div class="state" role="status">
+          <img src="assets/img/empty-cart.png" alt="" aria-hidden="true" width="135" height="135" />
+          <p class="state-title">Your cart is empty</p>
+          <p class="state-text">Your group pre-order was sent to the restaurant. For any changes, please call us at this number:
+            <a href="tel:+1234456788990">+123 445 678 8990</a>.</p>
+          <a class="button button--secondary button--small" routerLink="/reservations" (click)="close()">Go to my Reservations</a>
+        </div>
       }
       @case ('not-found') {
         <div class="state" role="alert">

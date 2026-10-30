@@ -105,10 +105,15 @@ export class CardReservationComponent {
   // US20 AC5–AC7: pre-order actions and the group pre-order line of the Owner's card.
   readonly isGroup = computed(() => this.r().guestCount >= 2);
   readonly groupPreOrder = computed(() => (this.isGroup() ? (this.r().groupPreOrder ?? null) : null));
-  /** A cancelled visit has nothing left to pre-order, so it shows no counter; a completed one keeps it (AC7). */
+  /**
+   * Only while the group collects pre-orders, and on a completed visit (AC7). Once sent, the "Sent to Restaurant"
+   * badge says it all; a cancelled visit has nothing left to pre-order.
+   */
   readonly preOrdersCounter = computed(() => {
     const group = this.groupPreOrder();
-    if (!group || this.r().status === ReservationStatusCustomer.Cancelled) return null;
+    const status = this.r().status;
+    if (!group || status === ReservationStatusCustomer.Cancelled) return null;
+    if (status === ReservationStatusCustomer.Reserved && group.status === 'Submitted') return null;
     return `Pre-orders: ${group.submitted}/${group.seats}`;
   });
   /** From 30 minutes before the start no pre-order changes are possible (US23 AC7). */
@@ -149,6 +154,13 @@ export class CardReservationComponent {
 
   readonly statusView = computed<ReservationStatusView>(() => {
     const reservation = this.r();
+
+    // Until the visit starts, a group reservation shows where its pre-order is, as the Group Pre-Order page does.
+    if (reservation.status === ReservationStatusCustomer.Reserved) {
+      const groupStatus = this.groupPreOrder()?.status;
+      if (groupStatus === 'Submitted') return { class: 'sent', label: 'Sent to Restaurant' };
+      if (groupStatus === 'Open') return { class: 'collecting', label: 'Collecting pre-orders' };
+    }
 
     return (
       this.statusEnum()[reservation.status] ?? {

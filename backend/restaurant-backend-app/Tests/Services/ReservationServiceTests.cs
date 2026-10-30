@@ -806,4 +806,33 @@ public class ReservationServiceTests
 
         _mockGroupReservationService.Verify(r => r.CloseGroupReservationAsync(reservation.Id), Times.Once());
     }
+
+    [Theory]
+    [InlineData(ReservationStatus.Reserved, -1, ReservationStatus.Completed)]
+    [InlineData(ReservationStatus.Reserved, 1, ReservationStatus.Reserved)]
+    [InlineData(ReservationStatus.InProgress, -1, ReservationStatus.InProgress)]
+    [InlineData(ReservationStatus.Cancelled, -1, ReservationStatus.Cancelled)]
+    [InlineData(ReservationStatus.Completed, -1, ReservationStatus.Completed)]
+    public async Task CompleteIfEndedAsync_OnlyAReservationThatEndedUnstarted_BecomesCompleted(
+        ReservationStatus status, int minutesFromNowToEnd, ReservationStatus expected)
+    {
+        var reservation = new Reservation
+        {
+            Id = "res-1",
+            TableId = "table-1",
+            CustomerId = "customer-1",
+            WaiterId = "waiter-1",
+            StartTime = DateTime.UtcNow.AddMinutes(minutesFromNowToEnd - 90),
+            EndTime = DateTime.UtcNow.AddMinutes(minutesFromNowToEnd),
+            Status = status,
+        };
+
+        var result = await _reservationService.CompleteIfEndedAsync(reservation);
+
+        Assert.Equal(expected, result.Status);
+        bool completedNow = status != expected;
+        _mockReservationRepository.Verify(r => r.SaveReservationAsync(reservation), completedNow ? Times.Once() : Times.Never());
+        // Completing closes the group, so its invite link expires.
+        _mockGroupReservationService.Verify(s => s.CloseGroupReservationAsync("res-1"), completedNow ? Times.Once() : Times.Never());
+    }
 }

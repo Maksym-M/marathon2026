@@ -2,7 +2,7 @@
 import { TestBed } from '@angular/core/testing';
 import { HttpErrorResponse } from '@angular/common/http';
 import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
-import { of, throwError } from 'rxjs';
+import { NEVER, of, throwError } from 'rxjs';
 import { ReservationStatusCustomer } from '@app/models/reservations/reservation.model';
 import { GroupOrdersService } from '@app/services/group-orders/group-orders.service';
 import { ToastService } from '@app/services/toast/toast.service';
@@ -11,6 +11,7 @@ import {
   INVITE,
   LUKA,
   NINO,
+  OPEN,
   OWNER,
   RESERVATION,
   buttonByLabel,
@@ -21,6 +22,11 @@ import {
   text,
 } from '@app/components/group-orders/testing/group-order.fixtures';
 import { GroupOrderPageComponent } from './group-order-page.component';
+
+const SUBMITTED_ERROR = new HttpErrorResponse({
+  status: 400,
+  error: { message: 'Group reservation was submitted.', errorCode: 'GroupReservationSubmitted' },
+});
 
 describe('Сторінка Group Pre-Order', () => {
   let service: jasmine.SpyObj<GroupOrdersService>;
@@ -59,10 +65,14 @@ describe('Сторінка Group Pre-Order', () => {
       expect(element.querySelector('a.back-link')?.getAttribute('href')).toBe('/reservations');
     });
 
-    it('вантажить бронювання, потім групу', () => {
-      render();
+    it('вантажить бронювання і групу одночасно — група не чекає на бронювання', () => {
+      service.getReservation$.and.returnValue(NEVER);
+      const { element } = render();
       expect(service.getReservation$).toHaveBeenCalledWith('res-1');
+      expect(service.getOwnerSessionId$).toHaveBeenCalledWith('res-1', { silent: true });
       expect(service.getGroupInvite$).toHaveBeenCalledWith('res-1');
+      // The reservation still decides what shows first.
+      expect(text(element)).toContain('Loading group pre-orders…');
     });
 
     it('деталі бронювання і бейдж «Collecting pre-orders»', () => {
@@ -115,10 +125,12 @@ describe('Сторінка Group Pre-Order', () => {
   });
 
   describe('стани (US21 AC9–AC10, US23 AC10)', () => {
-    it('404 — «You don\'t have access to this reservation.», груповий запит не йде', () => {
+    it('404 — «You don\'t have access to this reservation.», без даних групи', () => {
       service.getReservation$.and.returnValue(throwError(() => new HttpErrorResponse({ status: 404 })));
-      expect(text(render().element)).toContain("You don't have access to this reservation.");
-      expect(service.getGroupInvite$).not.toHaveBeenCalled();
+      const { element } = render();
+      expect(text(element)).toContain("You don't have access to this reservation.");
+      expect(element.querySelector('app-participant-panel')).toBeNull();
+      expect(text(element)).not.toContain('Grand Total');
     });
 
     it('помилка — «Try Again» вантажить ще раз', () => {
@@ -146,8 +158,9 @@ describe('Сторінка Group Pre-Order', () => {
 
     it('1 гість — групового pre-order немає', () => {
       service.getReservation$.and.returnValue(of({ ...RESERVATION, guestCount: 1 }));
-      expect(text(render().element)).toContain('available for reservations with 2 or more guests');
-      expect(service.getGroupInvite$).not.toHaveBeenCalled();
+      const { element } = render();
+      expect(text(element)).toContain('available for reservations with 2 or more guests');
+      expect(element.querySelector('app-participant-panel')).toBeNull();
     });
 
     it('менше 30 хв до початку — банер і жодних кнопок редагування', () => {
@@ -160,10 +173,103 @@ describe('Сторінка Group Pre-Order', () => {
       expect(buttonByText(element, 'Submit Pre-Order')?.disabled).toBeTrue();
     });
 
-    it('надіслано — «Sent to Restaurant», лише перегляд', () => {
+    describe('відкрито після надсилання: учасники через сесію Owner «owner-{groupId}»', () => {
+      beforeEach(() => {
+        service.getGroupInvite$.and.returnValue(throwError(() => SUBMITTED_ERROR));
+        service.getOwnerSessionId$.and.returnValue(of('owner-grp-1'));
+        service.getSessions$.and.returnValue(of(sessions([{ ...OWNER, id: 'owner-grp-1' }, NINO, LUKA, GIORGI])));
+        service.getStatus$.and.returnValue(of({ currentParticipants: 4, maxCapacity: 4, status: 'Submitted' as const }));
+      });
+
+      it('вантажить сесії групи за id з сесії Owner і не просить invite-token (він відповів би 400)', () => {
+        render();
+        expect(service.getOwnerSessionId$).toHaveBeenCalledWith('res-1', { silent: true });
+        expect(service.getSessions$).toHaveBeenCalledWith('grp-1', { silent: true });
+        expect(service.getGroupInvite$).not.toHaveBeenCalled();
+        expect(service.getOrder$).not.toHaveBeenCalled();
+      });
+
+      it('відкрита група — invite усе ж потрібен: деталі й посилання для гостей', () => {
+        service.getStatus$.and.returnValue(of(OPEN));
+        service.getGroupInvite$.and.returnValue(of({ token: 'tok', invite: INVITE }));
+        const { element } = render();
+        expect(service.getGroupInvite$).toHaveBeenCalledOnceWith('res-1');
+        expect(text(element)).toContain('Collecting pre-orders');
+        expect(text(element)).toContain('Table 7');
+      });
+
+      it('деталі, «Sent to Restaurant» і замовлення кожного учасника — лише перегляд', () => {
+        const { element } = render();
+        expect(text(element.querySelector('.details')!)).toContain('48 Rustaveli Avenue');
+        expect(text(element)).toContain('Sent to Restaurant');
+        expect(text(element)).toContain(
+          'Your group pre-order has been sent to the restaurant. For any changes, please call us at this number: +123 445 678 8990.',
+        );
+        expect(element.querySelector('a[href="tel:+1234456788990"]')).not.toBeNull();
+        expect(text(panel(element, 'My Pre-Order'))).toContain('Fresh Strawberry Mint Salad');
+        expect(text(panel(element, 'Guest: Nino'))).toContain('Berry Cacao Bowl');
+        expect(text(element.querySelector('.total-card')!)).toContain('$87.00');
+        expect(element.querySelector('app-quantity-stepper')).toBeNull();
+        expect(buttonByText(element, 'Remove Guest')).toBeUndefined();
+        expect(buttonByText(element, 'Submit Pre-Order')).toBeUndefined();
+      });
+
+      it('без індикатора прогресу, «joined» і порожніх місць', () => {
+        const { element } = render();
+        expect(element.querySelector('[role="progressbar"]')).toBeNull();
+        expect(text(element)).not.toContain('of 4 submitted');
+        expect(text(element)).not.toContain('of 4 joined');
+        expect(text(element)).not.toContain('Not joined');
+        expect(buttonByText(element, 'Refresh')).toBeUndefined();
+      });
+    });
+
+    describe('відкрито після надсилання, сесію Owner не розпізнано — запасний вигляд зі злитого замовлення', () => {
+      beforeEach(() => service.getGroupInvite$.and.returnValue(throwError(() => SUBMITTED_ERROR)));
+
+      it('деталі бронювання, «Sent to Restaurant» і повідомлення, а не помилка', () => {
+        const { element } = render();
+        const details = text(element.querySelector('.details')!);
+        expect(details).toContain('Green & Tasty');
+        expect(details).toContain('48 Rustaveli Avenue');
+        expect(details).toContain('12:00 - 13:30');
+        expect(details).toContain('4 people');
+        expect(text(element)).toContain('Sent to Restaurant');
+        expect(text(element)).toContain('Your group pre-order has been sent to the restaurant.');
+        expect(text(element)).not.toContain("We couldn't load group pre-orders.");
+      });
+
+      it('Dish Summary і Grand Total — зі злитого замовлення', () => {
+        const { element } = render();
+        expect(service.getOrder$).toHaveBeenCalledOnceWith('res-1');
+        const names = [...element.querySelectorAll('.line-name')].map(text);
+        expect(names).toEqual(['Berry Cacao Bowl', 'Fresh Strawberry Mint Salad', 'Roasted Sweet Potato & Lentil Salad', 'Spring Salad']);
+        expect(text(element.querySelector('.total-card')!)).toContain('$87.00');
+      });
+
+      it('без елементів незакритого замовлення: учасників, прогресу, Submit, редагування', () => {
+        const { element } = render();
+        expect(element.querySelector('app-participant-panel')).toBeNull();
+        expect(element.querySelector('[role="progressbar"]')).toBeNull();
+        expect(buttonByText(element, 'Submit Pre-Order')).toBeUndefined();
+        expect(buttonByText(element, 'Refresh')).toBeUndefined();
+        expect(element.querySelector('app-quantity-stepper')).toBeNull();
+      });
+
+      it('замовлення не завантажилось — деталі лишаються, страви — повідомлення', () => {
+        service.getOrder$.and.returnValue(throwError(() => new HttpErrorResponse({ status: 500 })));
+        const { element } = render();
+        expect(element.querySelector('.details')).not.toBeNull();
+        expect(text(element)).toContain("We couldn't load the dishes.");
+      });
+    });
+
+    it('надіслано — «Sent to Restaurant», лише перегляд, без індикатора прогресу', () => {
       service.getStatus$.and.returnValue(of({ currentParticipants: 4, maxCapacity: 4, status: 'Submitted' as const }));
       const { element } = render();
       expect(text(element)).toContain('Sent to Restaurant');
+      expect(element.querySelector('[role="progressbar"]')).toBeNull();
+      expect(text(panel(element, 'Guest: Nino'))).toContain('Berry Cacao Bowl');
       expect(element.querySelector('app-quantity-stepper')).toBeNull();
       expect(buttonByText(element, 'Submit Pre-Order')).toBeUndefined();
     });

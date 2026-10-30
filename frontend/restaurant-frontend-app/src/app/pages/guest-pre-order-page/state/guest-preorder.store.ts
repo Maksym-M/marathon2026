@@ -145,7 +145,6 @@ export class GuestPreorderStore {
             guestName: this.guestName(),
         };
 
-        console.log('[join payload]', payload);
 
         this.joinLoading.set(true);
         this.joinError.set(null);
@@ -155,8 +154,7 @@ export class GuestPreorderStore {
             this.guestSessionId.set(res.SessionId);
             this.guestSessionToken.set(res.SessionToken);
             await this.loadMenu();
-        } catch (e) {
-            console.log('[join error]', e);
+        } catch {
             this.joinError.set('Failed to join session');
         } finally {
             this.joinLoading.set(false);
@@ -210,12 +208,9 @@ export class GuestPreorderStore {
 
         try {
             const res = await firstValueFrom(this.guestSessionsService.getMenu(id, token));
-            console.log('[menu response]', res);
-            console.log('[menu dishes keys]', Object.keys(res.dishes ?? {}));
 
             this.menuByCategory.set(res.dishes ?? {});
-        } catch (e) {
-            console.log('[menu error]', e);
+        } catch {
             this.menuError.set('Failed to load menu');
             this.menuByCategory.set({});
         } finally {

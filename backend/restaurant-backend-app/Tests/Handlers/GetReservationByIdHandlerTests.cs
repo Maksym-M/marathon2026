@@ -26,6 +26,9 @@ public class GetReservationByIdHandlerTests
         _locationService
             .Setup(s => s.GetLocationByTableIdAsync(It.IsAny<string>()))
             .ReturnsAsync(new Location { Id = "loc-1", Address = "48 Rustaveli Avenue", Description = "", AverageOccupancy = "" });
+        _reservationService
+            .Setup(s => s.CompleteIfEndedAsync(It.IsAny<Reservation>()))
+            .ReturnsAsync((Reservation reservation) => reservation);
         _handler = new GetReservationByIdHandler(_orderService.Object, _locationService.Object, _reservationService.Object);
     }
 

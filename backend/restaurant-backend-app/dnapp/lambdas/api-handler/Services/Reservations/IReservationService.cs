@@ -11,6 +11,12 @@ public interface IReservationService
     Task<Reservation?> GetReservationByIdAsync(string reservationId);
     Task<bool> UpdateReservationAsync(Reservation reservation);
 
+    /// <summary>
+    /// Marks a reservation that never started "Completed" once its end time has passed and saves it (the group invite
+    /// closes, as on any completion). Called where reservations are read, so every list and detail view shows it.
+    /// </summary>
+    Task<Reservation> CompleteIfEndedAsync(Reservation reservation);
+
     Task<ReservationResponse> UpdateReservationTableAsync(string callerId, string reservationId, string newTableId, ILambdaLogger logger);
 
     Task<ReservationResponse> CreateReservationAsync(CreateReservationRequest request, string callerId, bool isWaiter, ILambdaLogger logger);

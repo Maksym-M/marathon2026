@@ -7,6 +7,7 @@ import { GroupRequestOptions } from '@app/models/group-orders/group-request-opti
 import { GroupSessionsResponse } from '@app/models/group-orders/group-sessions-response.model';
 import { GroupStatusResponse } from '@app/models/group-orders/group-status.model';
 import { OwnerSessionResponse } from '@app/models/group-orders/owner-session.model';
+import { Order } from '@app/models/orders/order.model';
 import { SubmitGroupPreOrderRequest, SubmittedDish } from '@app/models/group-orders/submit-group-pre-order.model';
 import { UpdateDishQuantityRequest } from '@app/models/group-orders/update-dish-quantity.model';
 import { ReservationCustomer } from '@app/models/reservations/reservation.model';
@@ -21,11 +22,18 @@ export class GroupOrdersService {
   private readonly http = inject(HttpClient);
   private readonly guestInviteService = inject(GuestInviteService);
 
+  /**
+   * Silent: the cart and the Group Pre-Order page show their own states, and a submitted group answers
+   * 400 `GroupReservationSubmitted` here, which is not an error for the Owner.
+   */
   getGroupInvite$(reservationId: string): Observable<GroupInviteDetails> {
+    const options = { silent: true };
     return this.guestInviteService
-      .getInviteToken$(reservationId)
+      .getInviteToken$(reservationId, options)
       .pipe(
-        switchMap(({ token }) => this.guestInviteService.getInvite$(token).pipe(map((invite) => ({ token, invite })))),
+        switchMap(({ token }) =>
+          this.guestInviteService.getInvite$(token, options).pipe(map((invite) => ({ token, invite }))),
+        ),
       );
   }
 
@@ -36,15 +44,24 @@ export class GroupOrdersService {
     });
   }
 
+  /** The reservation's Order: after Submit it holds every submitted dish. Silent, like `getReservation$`. */
+  getOrder$(reservationId: string): Observable<Order> {
+    return this.http.get<Order>(`${this.baseUrl}/orders/${encodeURIComponent(reservationId)}`, {
+      context: this.context({ silent: true }),
+    });
+  }
+
   getSessions$(groupReservationId: string, options: GroupRequestOptions = {}): Observable<GroupSessionsResponse> {
     return this.http.get<GroupSessionsResponse>(this.sessionsUrl(groupReservationId), {
       context: this.context(options),
     });
   }
 
-  getOwnerSessionId$(reservationId: string): Observable<string> {
+  getOwnerSessionId$(reservationId: string, options: GroupRequestOptions = {}): Observable<string> {
     return this.http
-      .get<OwnerSessionResponse>(`${this.baseUrl}/reservations/${encodeURIComponent(reservationId)}/guest-session-id`)
+      .get<OwnerSessionResponse>(`${this.baseUrl}/reservations/${encodeURIComponent(reservationId)}/guest-session-id`, {
+        context: this.context(options),
+      })
       .pipe(map(({ guestSessionId }) => guestSessionId));
   }
 

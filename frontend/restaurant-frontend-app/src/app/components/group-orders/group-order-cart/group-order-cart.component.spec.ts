@@ -33,7 +33,7 @@ describe('Рівень 2 · кошик Owner', () => {
     it('бере reservationId і вантажить групу за GroupReservationId', () => {
       renderCart(service);
       expect(service.getGroupInvite$).toHaveBeenCalledWith('res-1');
-      expect(service.getOwnerSessionId$).toHaveBeenCalledWith('res-1');
+      expect(service.getOwnerSessionId$).toHaveBeenCalledWith('res-1', { silent: true });
       expect(service.getSessions$.calls.mostRecent().args[0]).toBe('grp-1');
       expect(service.getStatus$.calls.mostRecent().args[0]).toBe('grp-1');
     });
@@ -127,6 +127,36 @@ describe('Рівень 2 · кошик Owner', () => {
       expect(text(renderCart(service).element)).toContain("You don't have access to this reservation.");
     });
 
+    it('група вже надіслана (400 GroupReservationSubmitted): порожній кошик, а не помилка', () => {
+      service.getGroupInvite$.and.returnValue(
+        throwError(
+          () =>
+            new HttpErrorResponse({
+              status: 400,
+              error: { message: 'Group reservation was submitted.', errorCode: 'GroupReservationSubmitted' },
+            }),
+        ),
+      );
+      const content = text(renderCart(service).element);
+      expect(content).toContain('Your cart is empty');
+      expect(content).toContain('Go to my Reservations');
+      expect(content).not.toContain("We couldn't load group pre-orders.");
+    });
+
+    it('група вже надіслана, знайдена через сесію Owner — порожній кошик без запиту invite-token', () => {
+      service.getOwnerSessionId$.and.returnValue(of('owner-grp-1'));
+      service.getStatus$.and.returnValue(of({ currentParticipants: 4, maxCapacity: 4, status: 'Submitted' as const }));
+      const content = text(renderCart(service).element);
+      expect(service.getGroupInvite$).not.toHaveBeenCalled();
+      expect(content).toContain('Your cart is empty');
+      expect(content).not.toContain('Grand Total');
+    });
+
+    it('інший 400 без errorCode — як і раніше, «Try Again»', () => {
+      service.getGroupInvite$.and.returnValue(throwError(() => new HttpErrorResponse({ status: 400, error: { message: 'Bad' } })));
+      expect(text(renderCart(service).element)).toContain("We couldn't load group pre-orders.");
+    });
+
     it('інша помилка: «Try Again» вантажить ще раз і показує дані', () => {
       service.getGroupInvite$.and.returnValues(
         throwError(() => new HttpErrorResponse({ status: 500 })),
@@ -203,14 +233,17 @@ describe('Рівень 2 · кошик Owner', () => {
       expect(service.submit$).toHaveBeenCalledOnceWith('grp-1', 'res-1');
     });
 
-    it('успіх: toast, «Sent to Restaurant», екран лише для перегляду', () => {
+    it('успіх: toast і порожній кошик — «Your cart is empty»', () => {
       service.submit$.and.returnValue(of([{ dishId: 'dish-berry', quantity: 2 }]));
       const { fixture, element, toast } = openSubmitDialog();
       buttonByText(dialog(element), 'Submit')?.click();
       fixture.detectChanges();
 
       expect(toast.success).toHaveBeenCalledWith('Pre-order sent to the restaurant');
-      expect(text(element)).toContain('Sent to Restaurant');
+      expect(text(element)).toContain('Your cart is empty');
+      expect(text(element)).toContain('Your group pre-order was sent to the restaurant.');
+      expect(text(element)).not.toContain('Fresh Strawberry Mint Salad');
+      expect(text(element)).not.toContain('Grand Total');
       expect(buttonByText(element, 'Submit Pre-Order')).toBeUndefined();
       expect(element.querySelector('app-quantity-stepper')).toBeNull();
       expect(buttonByText(element, 'Remove Guest')).toBeUndefined();
@@ -225,6 +258,52 @@ describe('Рівень 2 · кошик Owner', () => {
       expect(element.querySelector('app-modal')).toBeNull();
       expect(buttonByText(element, 'Submit Pre-Order')?.disabled).toBeFalse();
       expect(toast.error).not.toHaveBeenCalled();
+    });
+  });
+  describe('швидке завантаження: група через сесію Owner, invite — у фоні', () => {
+    beforeEach(() => {
+      service.getOwnerSessionId$.and.returnValue(of('owner-grp-1'));
+      service.getSessions$.and.returnValue(of(sessions([{ ...OWNER, id: 'owner-grp-1' }, NINO, GIORGI])));
+    });
+
+    it('учасники видно одразу, ще до invite; редагування — лише коли відомий час (30-хв cut-off)', () => {
+      const invite$ = new Subject<{ token: string; invite: typeof INVITE }>();
+      service.getGroupInvite$.and.returnValue(invite$);
+      const { fixture, element } = renderCart(service);
+
+      expect(service.getSessions$).toHaveBeenCalledWith('grp-1', { silent: true });
+      expect(text(element)).toContain('Fresh Strawberry Mint Salad');
+      expect(element.querySelector('app-quantity-stepper')).toBeNull();
+
+      invite$.next({ token: 'tok', invite: INVITE });
+      invite$.complete();
+      fixture.detectChanges();
+
+      expect(text(element)).toContain('48 Rustaveli Avenue');
+      expect(element.querySelector('app-quantity-stepper')).not.toBeNull();
+    });
+
+    it('invite не віддали (усі місця зайняті — GuestLimitExceeded): кошик працює, без посилання', () => {
+      service.getGroupInvite$.and.returnValue(
+        throwError(() => new HttpErrorResponse({ status: 400, error: { errorCode: 'GuestLimitExceeded' } })),
+      );
+      const { element } = renderCart(service);
+
+      expect(text(element)).not.toContain("We couldn't load group pre-orders.");
+      expect(element.querySelector('app-quantity-stepper')).not.toBeNull();
+      expect(buttonByText(element, 'Invite Guests')).toBeUndefined();
+    });
+
+    it('зміни й Submit ідуть у групу з сесії Owner, навіть без invite', () => {
+      service.getGroupInvite$.and.returnValue(throwError(() => new HttpErrorResponse({ status: 400 })));
+      service.submit$.and.returnValue(of([] as SubmittedDish[]));
+      const { fixture, element } = renderCart(service);
+
+      buttonByText(element, 'Submit Pre-Order')?.click();
+      fixture.detectChanges();
+      buttonByText(dialog(element), 'Submit')?.click();
+
+      expect(service.submit$).toHaveBeenCalledOnceWith('grp-1', 'res-1');
     });
   });
 });

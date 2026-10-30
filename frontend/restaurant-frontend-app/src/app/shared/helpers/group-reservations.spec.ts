@@ -1,15 +1,23 @@
+import { GroupReservationStatus } from '@app/models/group-orders/group-status.model';
 import { Reservation, ReservationStatus } from '@app/models/reservations/reservation.model';
 import { findNearestGroupReservationId } from './group-reservations';
 
 const NOW = new Date('2030-10-17T12:00:00Z');
 
-const reservation = (id: string, start: string, guestCount: number, status = ReservationStatus.Reserved): Reservation =>
+const reservation = (
+  id: string,
+  start: string,
+  guestCount: number,
+  status = ReservationStatus.Reserved,
+  groupStatus: GroupReservationStatus | null = null,
+): Reservation =>
   ({
     id,
     startTime: new Date(start),
     endTime: new Date(new Date(start).getTime() + 90 * 60 * 1000),
     guestCount,
     status,
+    groupPreOrder: groupStatus && { status: groupStatus, submitted: 0, joined: 1, seats: guestCount },
   }) as Reservation;
 
 describe('findNearestGroupReservationId', () => {
@@ -32,6 +40,22 @@ describe('findNearestGroupReservationId', () => {
     },
     { name: 'already ended is skipped', reservations: [reservation('past', '2030-10-16T12:00:00Z', 4)], expected: null },
     { name: 'running now (not ended yet) still counts', reservations: [reservation('now', '2030-10-17T11:30:00Z', 4)], expected: 'now' },
+    {
+      name: 'an open group wins over a nearer submitted one',
+      reservations: [
+        reservation('submitted', '2030-10-18T12:00:00Z', 4, ReservationStatus.Reserved, 'Submitted'),
+        reservation('open', '2030-10-19T12:00:00Z', 3, ReservationStatus.Reserved, 'Open'),
+      ],
+      expected: 'open',
+    },
+    {
+      name: 'only submitted groups — the nearest one, so its cart shows as empty',
+      reservations: [
+        reservation('later', '2030-10-19T12:00:00Z', 3, ReservationStatus.Reserved, 'Submitted'),
+        reservation('sooner', '2030-10-18T12:00:00Z', 4, ReservationStatus.Reserved, 'Submitted'),
+      ],
+      expected: 'sooner',
+    },
   ];
 
   for (const { name, reservations, expected } of cases) {

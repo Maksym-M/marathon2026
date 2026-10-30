@@ -62,12 +62,19 @@
         (keydown.arrowRight)="switchTab()"
         (keydown.arrowLeft)="switchTab()"
       >
-        Past &amp; Cancelled ({{ tabs().past.length }})
+        {{ pastTabLabel() }}
       </button>
     </div>
 
     <div id="reservations-panel" role="tabpanel" [attr.aria-labelledby]="'reservations-tab-' + activeTab()">
-      @if (visibleReservations().length > 0) {
+      @if (activeTab() === 'past' && pastState() === 'loading') {
+        <p class="reservation-empty" role="status">Please wait while we load your past reservations.</p>
+      } @else if (activeTab() === 'past' && pastState() === 'error') {
+        <div class="reservation-empty" role="alert">
+          <p>We couldn't load your past reservations.</p>
+          <button type="button" class="button button--secondary button--large" (click)="retryPast()">Try Again</button>
+        </div>
+      } @else if (visibleReservations().length > 0) {
         <ul class="reservation-list">
           @for (reservation of visibleReservations(); track reservation.id) {
             <app-card-reservation

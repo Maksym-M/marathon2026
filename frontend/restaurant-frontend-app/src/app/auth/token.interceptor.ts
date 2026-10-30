@@ -25,8 +25,6 @@ export const tokenInterceptor: HttpInterceptorFn = (
   if (req.url.includes('/guest/') && !req.url.includes('/guest/groups/')) {
     return next(req).pipe(
       catchError((error: HttpErrorResponse) => {
-        console.log(error);
-
         let errorMessage = 'An unexpected error occurred.';
         if (error.error && typeof error.error === 'string') {
           errorMessage = error.error;
@@ -38,6 +36,9 @@ export const tokenInterceptor: HttpInterceptorFn = (
 
         // For guest endpoints, you may still show toast if you want:
         switch (error.status) {
+          case 0:
+            toastr.error('Could not reach the server. Please check your connection and try again.', 'Network error');
+            break;
           case 400:
             toastr.error(errorMessage || 'Bad request.', 'Error');
             break;
@@ -83,7 +84,6 @@ export const tokenInterceptor: HttpInterceptorFn = (
 
   return next(clonedRequest).pipe(
     catchError((error: HttpErrorResponse) => {
-      console.log(error);
       const errorMessage = getServerErrorMessage(error) || 'An unexpected error occurred.';
 
       if (clonedRequest.url.includes('orders') && error.status === 404) {
@@ -95,6 +95,10 @@ export const tokenInterceptor: HttpInterceptorFn = (
       }
 
       switch (error.status) {
+        // No response at all: offline, or a throttled API answering without CORS headers.
+        case 0:
+          toastr.error('Could not reach the server. Please check your connection and try again.', 'Network error');
+          break;
         case 400:
           toastr.error(errorMessage || 'Bad request.', 'Error');
           break;

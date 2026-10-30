@@ -28,3 +28,12 @@ crash.*.log
 # Agents/Skills
 .claude/
 CLAUDE.md
+
+# AQA framework (.NET / Reqnroll / Playwright)
+aqa/**/bin/
+aqa/**/obj/
+aqa/**/.vs/
+aqa/**/*.user
+aqa/**/.codemie/
+aqa/**/*.feature.cs
+aqa/**/TestResults/

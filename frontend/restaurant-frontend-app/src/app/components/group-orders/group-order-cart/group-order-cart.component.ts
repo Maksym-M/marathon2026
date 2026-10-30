@@ -40,6 +40,11 @@ export class GroupOrderCartComponent {
 
   readonly activeTab = signal<CartTab>('participants');
 
+  /** Once the group is sent to the restaurant nothing is left in the cart, so it shows as empty. */
+  readonly view = computed(() =>
+    this.store.loadState() === 'ready' && this.store.status() === 'Submitted' ? 'submitted' : this.store.loadState(),
+  );
+
   /** For the host page: the menu behind the cart shows which reservation is being pre-ordered. */
   readonly reservationLabel = computed(() => this.store.invite()?.LocationAddress ?? '');
 

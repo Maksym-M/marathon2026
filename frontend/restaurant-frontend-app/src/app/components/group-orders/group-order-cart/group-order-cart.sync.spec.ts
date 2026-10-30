@@ -126,14 +126,14 @@ describe('Рівень 3 · синхронізація', () => {
     discardPeriodicTasks();
   }));
 
-  it('статус Submitted з фонового оновлення (інша вкладка) — теж read-only і стоп', fakeAsync(() => {
+  it('статус Submitted з фонового оновлення (інша вкладка) — порожній кошик і стоп', fakeAsync(() => {
     const { fixture, element } = renderCart(service);
     service.getStatus$.and.returnValue(of({ currentParticipants: 4, maxCapacity: 4, status: 'Submitted' as const }));
     tick(GROUP_ORDER_SYNC_MS);
     fixture.detectChanges();
     tick(GROUP_ORDER_SYNC_MS * 2);
 
-    expect(text(element)).toContain('Sent to Restaurant');
+    expect(text(element)).toContain('Your cart is empty');
     expect(service.getSessions$).toHaveBeenCalledTimes(2);
     discardPeriodicTasks();
   }));

@@ -3,7 +3,9 @@ import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideRouter } from '@angular/router';
-import { of, throwError } from 'rxjs';
+import { NEVER, Observable, of, Subject, throwError } from 'rxjs';
+import { FeedbackReservationResponseItem } from '@app/models/feedbacks/feedback-reservation-response-item.model';
+import { ReservationsRequestOptions } from '@app/models/reservations/reservations-request-options.model';
 import { AuthenticationService } from '@app/auth/services/authentication.service';
 import { Reservation, ReservationStatus } from '@app/models/reservations/reservation.model';
 import { PreOrdersService } from '@app/services/pre-orders/pre-orders.service';
@@ -30,7 +32,12 @@ const reservation = (id: string, start: string, status: ReservationStatus): Rese
 describe('ReservationDashboardComponent (US20)', () => {
   let reservationService: jasmine.SpyObj<ReservationService>;
 
-  function render(reservations: Reservation[]) {
+  function render(
+    reservations: Reservation[],
+    feedback: (reservationId: string) => Observable<FeedbackReservationResponseItem | null> = () =>
+      throwError(() => ({ status: 404 })),
+    list: (options?: ReservationsRequestOptions) => Observable<Reservation[]> = () => of(reservations),
+  ) {
     const auth = jasmine.createSpyObj<AuthenticationService>('AuthenticationService', ['getToken', 'getUser']);
     auth.getToken.and.returnValue('token');
     auth.getUser.and.returnValue({ id: 'user-1', firstName: 'Maksym', lastName: 'Test', email: 'm@test', role: Roles.CUSTOMER });
@@ -40,8 +47,8 @@ describe('ReservationDashboardComponent (US20)', () => {
       'cancelReservation$',
     ]);
     reservationService.cancelReservation$.and.returnValue(of({ message: 'Cancelled' }));
-    reservationService.getReservationsForUser$.and.returnValue(of(reservations));
-    reservationService.getReservationFeedback.and.returnValue(throwError(() => ({ status: 404 })));
+    reservationService.getReservationsForUser$.and.callFake(list);
+    reservationService.getReservationFeedback.and.callFake(feedback);
 
     TestBed.configureTestingModule({
       imports: [ReservationDashboardComponent],
@@ -121,7 +128,11 @@ describe('ReservationDashboardComponent (US20)', () => {
       fixture.detectChanges();
 
       expect(reservationService.cancelReservation$).toHaveBeenCalledOnceWith('soon');
-      expect(text(element.querySelector('#reservations-tab-past')!)).toBe('Past & Cancelled (1)');
+      expect(text(element.querySelector('#reservations-tab-upcoming')!)).toBe('Upcoming (0)');
+
+      (element.querySelector('#reservations-tab-past') as HTMLButtonElement).click();
+      fixture.detectChanges();
+      expect(addresses(element)).toEqual(['soon']);
     });
   });
 
@@ -167,5 +178,142 @@ describe('ReservationDashboardComponent (US20)', () => {
     element.querySelector<HTMLButtonElement>('#reservations-tab-past')?.click();
     fixture.detectChanges();
     expect(text(element)).toContain('No past or cancelled reservations.');
+  });
+  describe('Feedback loading (fewer, gentler requests)', () => {
+    const FEEDBACK = { service: { rating: 5 }, cuisineExperience: { rating: 4 } } as FeedbackReservationResponseItem;
+
+    it('asks for a fresh list, and for feedback only on In Progress and Completed reservations', () => {
+      render([
+        reservation('reserved', '2030-10-20T12:00:00Z', ReservationStatus.Reserved),
+        reservation('cancelled', '2026-10-01T12:00:00Z', ReservationStatus.Cancelled),
+        reservation('in-progress', '2026-10-29T12:00:00Z', ReservationStatus.InProggress),
+        reservation('finished', '2026-10-02T12:00:00Z', ReservationStatus.Finished),
+      ]);
+      expect(reservationService.getReservationsForUser$).toHaveBeenCalledWith({ fresh: true, scope: 'upcoming' });
+      expect(reservationService.getReservationFeedback.calls.allArgs()).toEqual([['in-progress'], ['finished']]);
+    });
+
+    it('shows the list before feedback arrives', () => {
+      const { element } = render([reservation('finished', '2026-10-02T12:00:00Z', ReservationStatus.Finished)], () => NEVER);
+      expect(element.querySelector('.tabs, [role="tablist"]')).not.toBeNull();
+      expect(text(element)).toContain('Past & Cancelled (1)');
+    });
+
+    it('keeps at most 4 feedback requests in flight and fills each one in as it arrives', () => {
+      const pending = new Map<string, Subject<FeedbackReservationResponseItem | null>>();
+      const finished = Array.from({ length: 6 }, (_, index) =>
+        reservation(`f${index}`, `2026-10-0${index + 1}T12:00:00Z`, ReservationStatus.Finished),
+      );
+      const { fixture } = render(finished, (reservationId) => {
+        const subject = new Subject<FeedbackReservationResponseItem | null>();
+        pending.set(reservationId, subject);
+        return subject;
+      });
+      expect(pending.size).toBe(4);
+
+      pending.get('f0')!.next(FEEDBACK);
+      pending.get('f0')!.complete();
+      expect(pending.size).toBe(5);
+
+      const component = fixture.componentInstance;
+      expect(component.reservations().find((item) => item.id === 'f0')?.feedback).toEqual(FEEDBACK);
+      expect(component.reservations().find((item) => item.id === 'f1')?.feedback).toBeUndefined();
+    });
+
+    it('a feedback request that fails (status 0) still leaves the reservation on the list', () => {
+      const { fixture } = render([reservation('finished', '2026-10-02T12:00:00Z', ReservationStatus.Finished)], () =>
+        throwError(() => ({ status: 0, message: 'Unknown Error' })),
+      );
+      expect(fixture.componentInstance.reservations().map((item) => item.id)).toEqual(['finished']);
+      expect(fixture.componentInstance.reservations()[0].feedback).toBeUndefined();
+    });
+  });
+  describe('Upcoming first, Past only when its tab opens (API with scopes)', () => {
+    const UPCOMING = [
+      reservation('soon', '2030-10-20T12:00:00Z', ReservationStatus.Reserved),
+      reservation('now', '2026-10-29T12:00:00Z', ReservationStatus.InProggress),
+    ];
+    const PAST = [
+      reservation('old', '2026-09-01T12:00:00Z', ReservationStatus.Finished),
+      reservation('older', '2026-08-01T12:00:00Z', ReservationStatus.Cancelled),
+    ];
+
+    /** Answers like a backend that knows `scope`; `past` can be replaced to control that request. */
+    function scoped(upcoming: Reservation[], past: () => Observable<Reservation[]> = () => of(PAST)) {
+      return (options?: ReservationsRequestOptions) => (options?.scope === 'past' ? past() : of(upcoming));
+    }
+
+    function pastTab(element: HTMLElement): HTMLButtonElement {
+      return element.querySelector<HTMLButtonElement>('#reservations-tab-past')!;
+    }
+
+    it('loads only Upcoming at first: no Past request, and its tab has no count yet', () => {
+      const { element } = render([], undefined, scoped(UPCOMING));
+
+      expect(reservationService.getReservationsForUser$.calls.allArgs()).toEqual([[{ fresh: true, scope: 'upcoming' }]]);
+      expect(text(element)).toContain('Upcoming (2)');
+      expect(text(pastTab(element))).toBe('Past & Cancelled');
+      expect(addresses(element)).toEqual(['now', 'soon']);
+    });
+
+    it('opening Past loads it once, shows a wait message meanwhile, then the list and its count', () => {
+      const past$ = new Subject<Reservation[]>();
+      const { fixture, element } = render([], undefined, scoped(UPCOMING, () => past$));
+
+      pastTab(element).click();
+      fixture.detectChanges();
+      expect(reservationService.getReservationsForUser$).toHaveBeenCalledWith({ fresh: true, scope: 'past' });
+      expect(text(element)).toContain('Please wait while we load your past reservations.');
+
+      past$.next(PAST);
+      past$.complete();
+      fixture.detectChanges();
+      expect(addresses(element)).toEqual(['old', 'older']);
+      expect(text(pastTab(element))).toBe('Past & Cancelled (2)');
+
+      (element.querySelector('#reservations-tab-upcoming') as HTMLButtonElement).click();
+      pastTab(element).click();
+      expect(reservationService.getReservationsForUser$.calls.count()).toBe(2);
+    });
+
+    it('feedback of completed reservations is asked for only once Past loads', () => {
+      const { fixture, element } = render([], undefined, scoped(UPCOMING));
+      expect(reservationService.getReservationFeedback.calls.allArgs()).toEqual([['now']]);
+
+      pastTab(element).click();
+      fixture.detectChanges();
+
+      expect(reservationService.getReservationFeedback.calls.allArgs()).toEqual([['now'], ['old']]);
+    });
+
+    it('Past failed — a message and Try Again, which loads it again', () => {
+      let attempts = 0;
+      const { fixture, element } = render([], undefined, scoped(UPCOMING, () =>
+        ++attempts === 1 ? throwError(() => ({ status: 500 })) : of(PAST),
+      ));
+
+      pastTab(element).click();
+      fixture.detectChanges();
+      expect(text(element)).toContain("We couldn't load your past reservations.");
+
+      [...element.querySelectorAll('button')].find((button) => text(button) === 'Try Again')!.click();
+      fixture.detectChanges();
+      expect(addresses(element)).toEqual(['old', 'older']);
+    });
+
+    it('nothing upcoming — Past loads right away to choose between the tabs and "No Reservations"', () => {
+      const { element } = render([], undefined, scoped([]));
+
+      expect(reservationService.getReservationsForUser$).toHaveBeenCalledWith({ fresh: true, scope: 'past' });
+      expect(text(element)).toContain('You have no upcoming reservations.');
+      expect(text(pastTab(element))).toBe('Past & Cancelled (2)');
+    });
+
+    it('nothing at all — "No Reservations"', () => {
+      const { element } = render([], undefined, scoped([], () => of([])));
+
+      expect(text(element)).toContain('No Reservations');
+      expect(element.querySelector('[role="tablist"]')).toBeNull();
+    });
   });
 });

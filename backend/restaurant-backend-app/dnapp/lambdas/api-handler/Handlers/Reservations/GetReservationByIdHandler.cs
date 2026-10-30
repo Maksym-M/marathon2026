@@ -49,6 +49,8 @@ public class GetReservationByIdHandler : IApiRequestHandler
             return ResponseBuilder.CreateErrorResponse(404, $"Reservation with id '{reservationId}' was not found.", context.Logger);
         }
 
+        reservation = await _reservationService.CompleteIfEndedAsync(reservation);
+
         var location = await _locationService.GetLocationByTableIdAsync(reservation.TableId);
 
         if (location == null)

@@ -471,6 +471,10 @@ Response: `201 Created`
 ```
 
 ### `GET` /reservations
+Query (Customer only, optional): `scope=upcoming` — Reserved and In Progress; `scope=past` — Completed and Cancelled.
+Without `scope` — all reservations. Any other value — `400`. Waiters always get their whole list.
+Each reservation costs several lookups, so the "Reservations" page asks for `upcoming` first and `past` only when that tab opens.
+
 Response: `200 OK`
 ```json
 [
@@ -499,6 +503,9 @@ Response: `200 OK`
 ```
 
 `status` is a number: `0` Reserved, `1` Cancelled, `2` In Progress, `3` Completed.
+
+A reservation still `Reserved` after its `endTime` is answered — and saved — as `Completed` (its group invite closes).
+This happens here and in `GET /reservations/{reservationId}`. A visit `In Progress` stays until its waiter completes it.
 
 `groupPreOrder` — only in a Customer's own list, for reservations with 2+ guests that have a group; otherwise `null`. Feeds "Pre-orders: {submitted}/{seats}" on the card (US20 AC6):
 - `submitted` — guests with a submitted pre-order, plus the Owner once they have dishes of their own;

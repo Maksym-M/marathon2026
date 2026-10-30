@@ -456,7 +456,7 @@ export class WaiterDashboardComponent implements OnInit {
     const waiterName = this.waiterName();
 
     this.reservationService
-      .getReservationsForUser$()
+      .getReservationsForUser$({ fresh: true })
       .pipe(
         switchMap((reservations) =>
           reservations.length === 0

@@ -1,7 +1,20 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { computed, DestroyRef, inject, Injectable, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { catchError, EMPTY, exhaustMap, filter, forkJoin, map, Observable, Subscription, switchMap, tap, timer } from 'rxjs';
+import {
+  catchError,
+  EMPTY,
+  exhaustMap,
+  filter,
+  finalize,
+  forkJoin,
+  map,
+  Observable,
+  Subscription,
+  switchMap,
+  tap,
+  timer,
+} from 'rxjs';
 import { GroupInviteDetails } from '@app/models/group-orders/group-invite-details.model';
 import { GroupOrderAction } from '@app/models/group-orders/group-order-action.model';
 import { GroupSessionsResponse } from '@app/models/group-orders/group-sessions-response.model';
@@ -11,14 +24,26 @@ import { GroupOrdersService } from '@app/services/group-orders/group-orders.serv
 import { ToastService } from '@app/services/toast/toast.service';
 import { consolidatePreOrder } from '@app/shared/helpers/consolidate-pre-order';
 import { buildDishSummary } from '@app/shared/helpers/dish-summary';
+import { getServerErrorCode } from '@app/shared/helpers/http-error-helpers';
+import { GroupOrderSnapshot } from './models';
 
 export const GROUP_ORDER_SYNC_MS = 15_000;
+/** invite-token answers 400 with this code once the group pre-order is sent to the restaurant. */
+const GROUP_SUBMITTED_ERROR_CODE = 'GroupReservationSubmitted';
+/** The API names the Owner's session `owner-{groupReservationId}`; after Submit it's the only way to the group. */
+const OWNER_SESSION_PREFIX = 'owner-';
+
+/** null when the id has another format: then the group is reached through the invite. */
+function groupIdFromOwnerSession(ownerSessionId: string): string | null {
+  return ownerSessionId.startsWith(OWNER_SESSION_PREFIX) ? ownerSessionId.slice(OWNER_SESSION_PREFIX.length) || null : null;
+}
 /** Pre-order cut-off (US23 AC7): no changes from 30 minutes before the reservation starts. */
 export const PRE_ORDER_CUTOFF_MS = 30 * 60 * 1000;
 /** Busy key for seat changes — never a session id, those are GUIDs or `owner-…`. */
 const SEATS_BUSY_ID = 'seats';
 
-export type GroupOrderLoadState = 'loading' | 'ready' | 'not-found' | 'error';
+/** `submitted`: the group was sent to the restaurant before this screen opened and its participants couldn't be loaded. */
+export type GroupOrderLoadState = 'loading' | 'ready' | 'submitted' | 'not-found' | 'error';
 export type GroupOrderRefreshState = 'idle' | 'refreshing' | 'failed';
 
 /**
@@ -33,6 +58,10 @@ export class GroupOrderStore {
 
   private readonly reservationId = signal('');
   private readonly details = signal<GroupInviteDetails | null>(null);
+  /** Known before the invite arrives (from the Owner's session), so the cart works while it loads. */
+  private readonly groupReservationId = signal('');
+  /** The reservation's guests count from the group status; the invite has the same number. */
+  private readonly capacity = signal(1);
   private readonly ownerSessionId = signal<string | null>(null);
   private readonly busyIds = signal<ReadonlySet<string>>(new Set());
 
@@ -45,6 +74,8 @@ export class GroupOrderStore {
   /** The action waiting for confirmation in a dialog, and whether its request is running. */
   readonly pendingAction = signal<GroupOrderAction | null>(null);
   readonly actionRunning = signal(false);
+  /** The invite loads after the cart shows; until then its time is unknown, so nothing is editable yet. */
+  readonly detailsLoading = signal(false);
 
   readonly invite = computed(() => this.details()?.invite ?? null);
   readonly inviteLink = computed(() => {
@@ -73,17 +104,20 @@ export class GroupOrderStore {
     return !!start && Date.now() > new Date(start).getTime() - PRE_ORDER_CUTOFF_MS;
   });
   /** Changes are possible while the group collects pre-orders and the cut-off hasn't passed. */
-  readonly canEdit = computed(() => this.isOpen() && !this.isLocked());
+  readonly canEdit = computed(() => this.isOpen() && !this.isLocked() && !this.detailsLoading());
   /** Seats for guests: the guests count includes the Owner. */
-  readonly guestSeats = computed(() => Math.max((this.invite()?.MaxGuestCount ?? 1) - 1, this.guests().length));
+  readonly guestSeats = computed(() =>
+    Math.max((this.invite()?.MaxGuestCount ?? this.capacity()) - 1, this.guests().length),
+  );
   readonly openSeats = computed(() => this.guestSeats() - this.guests().length);
   readonly submittedGuests = computed(() => this.guests().filter((guest) => guest.isSubmitted).length);
   readonly pendingGuests = computed(() => this.guests().filter((guest) => !guest.isSubmitted).length);
   readonly includesGuestDishes = computed(() => this.guests().some((guest) => guest.isSubmitted && guest.items.length > 0));
   readonly canSubmit = computed(() => this.canEdit() && this.consolidated().items.length > 0 && !this.submitting());
 
-  private readonly groupId = computed(() => this.invite()?.GroupReservationId ?? '');
+  private readonly groupId = computed(() => this.invite()?.GroupReservationId ?? this.groupReservationId());
   private loadSubscription?: Subscription;
+  private detailsSubscription?: Subscription;
   /** Bumped by every edit, so a background refresh that started before it can't bring the old cart back. */
   private mutationVersion = 0;
 
@@ -97,33 +131,41 @@ export class GroupOrderStore {
       .subscribe();
   }
 
+  /**
+   * The Owner's session leads to the group first, so a group already sent to the restaurant never asks for
+   * the invite: invite-token answers 400 then. Participants show as soon as they arrive; an open group's
+   * invite (details and invite link) follows in the background.
+   * Silent: the cart and the page show their own error states.
+   */
   load(reservationId: string): void {
     this.reservationId.set(reservationId);
     this.loadState.set('loading');
     this.loadSubscription?.unsubscribe();
     this.loadSubscription = this.service
-      .getGroupInvite$(reservationId)
+      .getOwnerSessionId$(reservationId, { silent: true })
       .pipe(
-        switchMap((details) =>
-          forkJoin({
-            sessions: this.service.getSessions$(details.invite.GroupReservationId),
-            ownerSessionId: this.service.getOwnerSessionId$(reservationId),
-            status: this.service.getStatus$(details.invite.GroupReservationId),
-          }).pipe(map((data) => ({ details, ...data }))),
-        ),
+        switchMap((ownerSessionId) => {
+          const groupReservationId = groupIdFromOwnerSession(ownerSessionId);
+          const group$ = groupReservationId
+            ? this.loadByGroup$(groupReservationId)
+            : this.loadByInvite$(reservationId);
+          return group$.pipe(map((group) => ({ ownerSessionId, ...group })));
+        }),
         takeUntilDestroyed(this.destroyRef),
       )
       .subscribe({
-        next: ({ details, sessions, ownerSessionId, status }) => {
+        next: ({ details, groupReservationId, sessions, ownerSessionId, status }) => {
           this.details.set(details);
+          this.groupReservationId.set(groupReservationId);
+          this.capacity.set(status.maxCapacity);
           this.ownerSessionId.set(ownerSessionId);
           this.applySnapshot(sessions);
           this.status.set(status.status);
           this.refreshState.set('idle');
           this.loadState.set('ready');
+          if (!details && status.status === 'Open') this.loadDetails(reservationId);
         },
-        error: (error: unknown) =>
-          this.loadState.set(error instanceof HttpErrorResponse && error.status === 404 ? 'not-found' : 'error'),
+        error: (error: unknown) => this.onLoadError(error),
       });
   }
 
@@ -220,6 +262,7 @@ export class GroupOrderStore {
       .subscribe({
         next: ({ maxCapacity, status }) => {
           this.setBusy(SEATS_BUSY_ID, false);
+          this.capacity.set(maxCapacity);
           this.details.update((details) => details && { ...details, invite: { ...details.invite, MaxGuestCount: maxCapacity } });
           this.status.set(status);
           this.toast.success(`Your reservation is now for ${maxCapacity} guests`);
@@ -275,6 +318,7 @@ export class GroupOrderStore {
       tap(({ sessions, status }) => {
         if (version === this.mutationVersion) this.applySnapshot(sessions);
         this.status.set(status.status);
+        this.capacity.set(status.maxCapacity);
         this.refreshState.set('idle');
       }),
       catchError(() => {
@@ -282,6 +326,56 @@ export class GroupOrderStore {
         return EMPTY;
       }),
     );
+  }
+
+  private onLoadError(error: unknown): void {
+    if (!(error instanceof HttpErrorResponse)) {
+      this.loadState.set('error');
+    } else if (getServerErrorCode(error) === GROUP_SUBMITTED_ERROR_CODE) {
+      // Only when the group couldn't be reached without the invite, or it was sent while this screen loaded.
+      this.status.set('Submitted');
+      this.loadState.set('submitted');
+    } else {
+      this.loadState.set(error.status === 404 ? 'not-found' : 'error');
+    }
+  }
+
+  private loadByGroup$(groupReservationId: string): Observable<GroupOrderSnapshot> {
+    return forkJoin({
+      sessions: this.service.getSessions$(groupReservationId, { silent: true }),
+      status: this.service.getStatus$(groupReservationId, { silent: true }),
+    }).pipe(map((data) => ({ details: null, groupReservationId, ...data })));
+  }
+
+  private loadByInvite$(reservationId: string): Observable<GroupOrderSnapshot> {
+    return this.service.getGroupInvite$(reservationId).pipe(
+      switchMap((details) => {
+        const groupReservationId = details.invite.GroupReservationId;
+        return forkJoin({
+          sessions: this.service.getSessions$(groupReservationId, { silent: true }),
+          status: this.service.getStatus$(groupReservationId, { silent: true }),
+        }).pipe(map((data) => ({ details, groupReservationId, ...data })));
+      }),
+    );
+  }
+
+  /**
+   * It can fail while the group is still open: the API refuses the invite once every seat is taken, or
+   * the group was just sent from another tab. The cart then works without the invite link and its details.
+   */
+  private loadDetails(reservationId: string): void {
+    this.detailsSubscription?.unsubscribe();
+    this.detailsLoading.set(true);
+    this.detailsSubscription = this.service
+      .getGroupInvite$(reservationId)
+      .pipe(
+        finalize(() => this.detailsLoading.set(false)),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe({
+        next: (details) => this.details.set(details),
+        error: () => undefined,
+      });
   }
 
   private applySnapshot(snapshot: GroupSessionsResponse): void {
