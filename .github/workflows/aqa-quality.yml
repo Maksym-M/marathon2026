@@ -1,0 +1,51 @@
+name: AQA Quality
+
+# Static checks of the test framework on every push and pull request that touches it. Runs no scenario, so it needs
+# no environment, variables or secrets.
+on:
+  push:
+    paths:
+      - "aqa/**"
+      - ".github/workflows/aqa-*.yml"
+  pull_request:
+    paths:
+      - "aqa/**"
+      - ".github/workflows/aqa-*.yml"
+
+defaults:
+  run:
+    working-directory: aqa/restaurant-aqa-framework
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: No generated files tracked
+        run: |
+          tracked=$(git ls-files '*.feature.cs' 'bin/*' 'obj/*' 'TestResults/*' '.env')
+          if [ -n "$tracked" ]; then echo "Generated or local files are tracked:"; echo "$tracked"; exit 1; fi
+
+      - name: Restore
+        run: dotnet restore restaurant-aqa-framework.csproj
+
+      - name: Format
+        run: dotnet format restaurant-aqa-framework.csproj --verify-no-changes --no-restore
+
+      - name: Build (warnings are errors)
+        run: dotnet build restaurant-aqa-framework.csproj --no-restore
+
+      - name: Gherkin lint
+        run: npx --yes gherkin-lint -c .gherkin-lintrc "Features/**/*.feature"
+
+      - name: Test discovery
+        run: dotnet run --no-build -- --list-tests

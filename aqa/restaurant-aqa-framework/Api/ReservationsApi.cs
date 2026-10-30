@@ -54,6 +54,21 @@ public sealed class ReservationsApi(IAPIRequestContext api) : ApiClientBase(api)
             Headers = Headers(bearerToken),
         });
 
+    /// <summary>The token of the link the Owner shares with guests (only for reservations of 2 or more guests).</summary>
+    public Task<IAPIResponse> GetInviteTokenAsync(string reservationId, string? bearerToken = null) =>
+        GetAsync(Url($"/reservations/{reservationId}/invite-token"), new APIRequestContextOptions
+        {
+            Headers = Headers(bearerToken),
+        });
+
+    /// <summary>The Owner's own session in the reservation's group; the backend creates it on the first call
+    /// (the group pre-order page makes this call when the Owner opens it).</summary>
+    public Task<IAPIResponse> GetOwnerSessionAsync(string reservationId, string? bearerToken = null) =>
+        GetAsync(Url($"/reservations/{reservationId}/guest-session-id"), new APIRequestContextOptions
+        {
+            Headers = Headers(bearerToken),
+        });
+
     public Task<IAPIResponse> GetReservationFeedbackAsync(string reservationId, string? bearerToken = null) =>
         GetAsync(Url($"/reservations/{reservationId}/feedback"), new APIRequestContextOptions
         {

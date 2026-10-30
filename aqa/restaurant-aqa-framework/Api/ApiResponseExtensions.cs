@@ -14,9 +14,10 @@ public static class ApiResponseExtensions
     }
 
     /// <summary>
-    /// The backend's error shape is <c>{"error": "..."}</c> (ResponseBuilder.CreateErrorResponse) for
-    /// almost every resource, but a few handlers (e.g. POST /tables) return a plain-text 400 body instead
-    /// of JSON. This falls back to the raw body so callers never throw while reading an error message.
+    /// The backend has two error shapes: <c>{"error": "..."}</c> (ResponseBuilder.CreateErrorResponse) and
+    /// <c>{"message": "...", "errorCode": "..."}</c> (CreateErrorCodeResponse, used for every ValidationException
+    /// of the group pre-order). A few handlers (e.g. POST /tables) return a plain-text 400 body instead of JSON.
+    /// This falls back to the raw body so callers never throw while reading an error message.
     /// </summary>
     public static async Task<string> ReadErrorMessageAsync(this IAPIResponse response)
     {
@@ -24,8 +25,9 @@ public static class ApiResponseExtensions
         try
         {
             var parsed = JsonSerializer.Deserialize<JsonElement>(json);
-            if (parsed.ValueKind == JsonValueKind.Object && parsed.TryGetProperty("error", out var error))
-                return error.GetString() ?? json;
+            if (parsed.ValueKind == JsonValueKind.Object
+                && (parsed.TryGetProperty("error", out var message) || parsed.TryGetProperty("message", out message)))
+                return message.GetString() ?? json;
         }
         catch (JsonException)
         {
