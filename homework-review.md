@@ -9,6 +9,7 @@ A short guide for the reviewer: where everything is, what was done for the homew
 - **Live app (frontend + deployed backend):** https://d12ohokkkl4x8r.cloudfront.net/reservations
 - **Code:** `backend/restaurant-backend-app` and `frontend/restaurant-frontend-app` in this repo
 - **Manual QA:** `homework-qa/` (US11 requirements analysis, test cases, bug reports)
+- **Test automation (AQA):** `aqa/restaurant-aqa-framework/`, reviewer notes in [aqa/restaurant-aqa-framework/homework-review.md](aqa/restaurant-aqa-framework/homework-review.md)
 - **Local demo without a backend:** `npm start` in `frontend/restaurant-frontend-app`, then open `http://localhost:4200/reservations?demo` or `http://localhost:4200/reservations/demo-reservation/group-order?demo`
 
 ## Backend homework: all 3 levels done ✅

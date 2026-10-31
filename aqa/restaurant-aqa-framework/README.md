@@ -6,6 +6,8 @@ Guidance for extending the suite (writing Gherkin, steps, Screenplay, test data,
 
 ## Homework solution: Direction 1, group pre-order (levels 1–3)
 
+Reviewer notes, with each homework requirement mapped to its scenario: [homework-review.md](homework-review.md).
+
 - **Direction:** 1. We test our own deployed backend and frontend: the group pre-order (owner, invited guests, waiter).
 - **Approach:** BDD + Screenplay, extending this framework. Gherkin describes behaviour in business language; Screenplay tasks and questions do the work through the API or the browser; page objects only hold locators.
 - **Test pyramid:** the UI covers the main journeys (the owner sees participants and totals, submits, removes a guest; the waiter sees the order). The API covers authorisation, validation and test data set-up (guests and their carts).
@@ -16,8 +18,6 @@ Guidance for extending the suite (writing Gherkin, steps, Screenplay, test data,
 | L2: submitting the consolidated pre-order | [SubmitGroupPreOrder.feature](Features/GroupPreOrder/SubmitGroupPreOrder.feature) | 14 | 3 |
 | L3: removing a participant | [RemoveParticipant.feature](Features/GroupPreOrder/RemoveParticipant.feature) | 11 | 1 |
 | L3: end-to-end journey | [GroupPreOrderJourney.feature](Features/GroupPreOrder/GroupPreOrderJourney.feature) | – | 1 |
-
-The test plan, the live API findings and the full scenario map are in [docs/group-preorder-test-plan.md](docs/group-preorder-test-plan.md).
 
 ### Set up (once per environment)
 
